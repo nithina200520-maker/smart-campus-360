@@ -105,6 +105,15 @@ html[data-theme="dark"] .sc-flake { background: radial-gradient(circle at 50% 50
 @keyframes sc-slashhue { 0% { filter: hue-rotate(0deg) saturate(1.2); } 100% { filter: hue-rotate(360deg) saturate(1.2); } }
 @keyframes sc-slashflow { 0% { background-position: 0 0; } 100% { background-position: 0 200%; } }
 
+/* Vertical rising rays: "/" rises + drifts left-to-right, "\" rises + drifts right-to-left (they cross) */
+.sc-slash-beam.up1 { left: 40%; animation: sc-move-upf 6.5s linear infinite; }
+.sc-slash-beam.up2 { left: 60%; animation: sc-move-upb 6.5s linear infinite 3.25s; }
+.sc-slash-beam.up1 .sc-slash-line, .sc-slash-beam.up2 .sc-slash-line { top: auto; bottom: -55%; height: 55%; }
+.sc-slash-line.back { animation-name: sc-slashshake-back, sc-slashhue, sc-slashflow; }
+@keyframes sc-slashshake-back { 0%, 100% { transform: rotate(25deg) translateX(0); } 25% { transform: rotate(25deg) translateX(-2px); } 75% { transform: rotate(25deg) translateX(2px); } }
+@keyframes sc-move-upf { 0% { transform: translate(-18vw, 70vh); opacity: 0; } 10% { opacity: 0.8; } 90% { opacity: 0.8; } 100% { transform: translate(18vw, -170vh); opacity: 0; } }
+@keyframes sc-move-upb { 0% { transform: translate(18vw, 70vh); opacity: 0; } 10% { opacity: 0.8; } 90% { opacity: 0.8; } 100% { transform: translate(-18vw, -170vh); opacity: 0; } }
+
 /* ============================== ENHANCED ANIMATIONS ============================== */
 .sc-banner { isolation: isolate; }
 .sc-banner-media { animation: sc-kenburns 26s ease-in-out infinite alternate; }
