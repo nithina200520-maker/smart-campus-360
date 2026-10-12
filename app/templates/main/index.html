@@ -1,229 +1,391 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Campus 360 | Dashboard | GEC Mosalehosahalli</title>
 
-{% block title %}Unified Campus Portal{% endblock %}
+  <!-- Prevent theme flash: apply saved / preferred theme before paint -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('sc360-theme');
+        if (!t) t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
+    })();
+  </script>
 
-{% block content %}
-<div class="container-fluid px-lg-4">
+  <!-- Font Awesome 6 + Outfit font -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Dashboard glassmorphism styles (self-contained) -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body class="sc360-body">
 
-  <!-- Hero Section -->
-  <div class="p-4 p-md-5 mb-4 rounded-4 text-white shadow" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 70%, #0d9488 100%);">
-    <div class="row align-items-center">
-      <div class="col-lg-8">
-        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold mb-3 shadow-sm">
-          <i class="fa-solid fa-graduation-cap me-1"></i> GEC MOSALEHOSAHALLI (HASSAN)
-        </span>
-        <h1 class="display-5 fw-bold text-white mb-2">Smart Campus 360</h1>
-        <p class="lead text-light mb-4">
-          The next-generation unified web application integrating <strong>Campus Navigation</strong>, 
-          <strong>AI-Powered Lost & Found</strong>, and <strong>Smart Canteen Management</strong>.
-        </p>
-        <div class="d-flex flex-wrap gap-2">
-          <a href="{{ url_for('navigation.index') }}" class="btn btn-primary btn-lg rounded-pill px-4 shadow">
-            <i class="fa-solid fa-map-location-dot me-2"></i> Explore Campus Map
+  <!-- Decorative gradient blobs -->
+  <div class="sc-blob b1"></div>
+  <div class="sc-blob b2"></div>
+  <div class="sc-scrim" id="scScrim"></div>
+
+  <!-- ============================= SIDEBAR ============================= -->
+  <aside class="sc-sidebar">
+    <a class="sc-brand" href="{{ url_for('main.index') }}">
+      <span class="sc-brand-3d"><i class="fa-solid fa-compass"></i></span>
+      <span class="sc-brand-txt">
+        <strong>Smart Campus <span style="color:var(--sc-blue)">360</span></strong>
+        <span>GEC Mosalehosahalli</span>
+      </span>
+    </a>
+
+    <div class="sc-nav-label">Main Menu</div>
+    <a class="sc-nav {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">
+      <i class="fa-solid fa-gauge-high"></i> Dashboard
+    </a>
+    <a class="sc-nav {% if request.blueprint == 'navigation' %}active{% endif %}" href="{{ url_for('navigation.index') }}">
+      <i class="fa-solid fa-map-location-dot"></i> Campus Navigation
+    </a>
+    <a class="sc-nav {% if request.blueprint == 'lost_found' %}active{% endif %}" href="{{ url_for('lost_found.index') }}">
+      <i class="fa-solid fa-magnifying-glass-location"></i> Lost &amp; Found
+    </a>
+    <a class="sc-nav {% if request.blueprint == 'canteen' %}active{% endif %}" href="{{ url_for('canteen.index') }}">
+      <i class="fa-solid fa-utensils"></i> Smart Canteen
+    </a>
+
+    <div class="sc-nav-label">My Activity</div>
+    <a class="sc-nav" href="{{ url_for('canteen.my_orders') }}">
+      <i class="fa-solid fa-receipt"></i> My Bookings
+    </a>
+    <a class="sc-nav" href="{{ url_for('lost_found.my_reports') }}">
+      <i class="fa-solid fa-boxes-stacked"></i> My Reports
+    </a>
+    <a class="sc-nav" href="{{ url_for('notifications.index') }}">
+      <i class="fa-regular fa-bell"></i> Notifications
+      {% if unread_notifications %}<span class="sc-pill">{{ unread_notifications }}</span>{% endif %}
+    </a>
+
+    <div class="sc-nav-label">Account</div>
+    <a class="sc-nav" href="{{ url_for('auth.profile') }}">
+      <i class="fa-solid fa-id-card"></i> Profile
+    </a>
+    <a class="sc-nav" href="{{ url_for('auth.profile') }}">
+      <i class="fa-solid fa-sliders"></i> Settings
+    </a>
+    <a class="sc-nav" href="{{ url_for('main.about') }}">
+      <i class="fa-solid fa-circle-question"></i> Help &amp; Support
+    </a>
+
+    {% if current_user and current_user.is_main_admin() %}
+    <a class="sc-nav" href="{{ url_for('admin.dashboard') }}" style="color:var(--sc-danger)">
+      <i class="fa-solid fa-shield-halved" style="color:var(--sc-danger)"></i> Main Admin Hub
+    </a>
+    {% endif %}
+    {% if current_user and current_user.is_canteen_admin() %}
+    <a class="sc-nav" href="{{ url_for('canteen_admin.dashboard') }}" style="color:var(--sc-success)">
+      <i class="fa-solid fa-kitchen-set" style="color:var(--sc-success)"></i> Canteen Operator Hub
+    </a>
+    {% endif %}
+
+    <div class="sc-side-foot">
+      <div class="sc-storage">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <i class="fa-solid fa-cube" style="color:var(--sc-blue)"></i>
+          <b>{{ stats.nodes_count }}</b> mapped locations live
+        </div>
+        <div>Navigation • AI Lost &amp; Found • Canteen — unified.</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============================= MAIN ============================= -->
+  <div class="sc-main">
+
+    <!-- Topbar -->
+    <header class="sc-topbar">
+      <button class="sc-icon-btn sc-hamb" id="scHamb" aria-label="Toggle menu"><i class="fa-solid fa-bars"></i></button>
+      <div class="sc-top-title">
+        <h2>Dashboard</h2>
+        <p id="scClock">Welcome back</p>
+      </div>
+
+      <form class="sc-search" id="scSearchForm" role="search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input id="scSearchInput" type="text" placeholder="Search lost &amp; found, items…" aria-label="Global search">
+      </form>
+
+      <button class="sc-icon-btn" id="themeToggle" title="Toggle theme" aria-label="Toggle light or dark theme">
+        <i class="fa-solid fa-moon" id="themeIcon"></i>
+      </button>
+
+      {% if ALLOW_QUICK_SWITCH %}
+      <!-- Developer role switcher - visible to everyone (incl. guests) only in development -->
+      <div class="sc-dd">
+        <button class="sc-icon-btn" data-dd-toggle title="Switch Role" style="width:auto;padding:0 12px">
+          <i class="fa-solid fa-masks-theater" style="color:var(--sc-warning)"></i>
+          <span style="font-size:0.8rem;font-weight:700;margin-left:8px">Switch Role</span>
+        </button>
+        <div class="sc-dd-menu" style="width:220px">
+          <div class="sc-dd-head" style="border:none;margin:0;padding:4px 10px"><span>Test Persona</span></div>
+          <a class="sc-dd-item" href="{{ url_for('auth.quick_switch', role='main_admin') }}"><i class="fa-solid fa-shield-halved"></i> Main Admin</a>
+          <a class="sc-dd-item" href="{{ url_for('auth.quick_switch', role='canteen_admin') }}"><i class="fa-solid fa-utensils"></i> Canteen Admin</a>
+          <a class="sc-dd-item" href="{{ url_for('auth.quick_switch', role='teacher') }}"><i class="fa-solid fa-chalkboard-user"></i> Teacher</a>
+          <a class="sc-dd-item" href="{{ url_for('auth.quick_switch', role='student') }}"><i class="fa-solid fa-user-graduate"></i> Student</a>
+          <a class="sc-dd-item" href="{{ url_for('auth.quick_switch', role='visitor') }}"><i class="fa-solid fa-street-view"></i> Visitor</a>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if current_user %}
+      <div class="sc-dd">
+        <button class="sc-icon-btn" data-dd-toggle title="Notifications" aria-label="Notifications">
+          <i class="fa-regular fa-bell"></i>
+          {% if unread_notifications %}<span class="sc-dot">{{ unread_notifications }}</span>{% endif %}
+        </button>
+        <div class="sc-dd-menu">
+          <div class="sc-dd-head">
+            <span>Notifications</span>
+            <a href="{{ url_for('notifications.index') }}" style="color:var(--sc-blue);text-decoration:none;font-size:0.78rem">View all</a>
+          </div>
+          {% for note in latest_notifications %}
+          <a class="sc-noti" href="{{ note.link_url or url_for('notifications.index') }}">
+            <span class="sc-nic"><i class="fa-regular fa-bell"></i></span>
+            <span>
+              <span class="sc-nt">{{ note.title }}</span>
+              <span class="sc-nm">{{ note.message }}</span>
+              <span class="sc-nu">{{ note.created_at.strftime('%d %b, %H:%M') if note.created_at }}</span>
+            </span>
           </a>
-          <a href="{{ url_for('canteen.index') }}" class="btn btn-warning btn-lg rounded-pill px-4 shadow">
-            <i class="fa-solid fa-utensils me-2"></i> Order Food (Canteen)
+          {% else %}
+          <div style="padding:16px;text-align:center;color:var(--sc-ink-soft);font-size:0.82rem">
+            No notifications yet.<br>Match and claim alerts appear here.
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="sc-dd">
+        <a class="sc-user" href="#" data-dd-toggle>
+          <span class="sc-avatar">{{ current_user.full_name[:1]|upper }}</span>
+          <span style="text-align:left">
+            <span class="sc-uname">{{ current_user.full_name.split()[0] }}</span>
+            <span class="sc-urole">{{ current_user.role.replace('_',' ') }}</span>
+          </span>
+        </a>
+        <div class="sc-dd-menu" style="width:240px">
+          <a class="sc-dd-item" href="{{ url_for('auth.profile') }}"><i class="fa-solid fa-id-card"></i> My Profile</a>
+          <a class="sc-dd-item" href="{{ url_for('canteen.my_orders') }}"><i class="fa-solid fa-receipt"></i> My Canteen Orders</a>
+          <a class="sc-dd-item" href="{{ url_for('lost_found.my_reports') }}"><i class="fa-solid fa-boxes-stacked"></i> My Lost &amp; Found</a>
+          <div class="sc-dd-sep"></div>
+          <a class="sc-dd-item danger" href="{{ url_for('auth.logout') }}"><i class="fa-solid fa-right-from-bracket"></i> Sign Out</a>
+        </div>
+      </div>
+      {% else %}
+      <a class="sc-btn sc-btn-light" href="{{ url_for('auth.login') }}" style="color:var(--sc-blue)">
+        <i class="fa-solid fa-right-to-bracket"></i> Log In
+      </a>
+      {% endif %}
+    </header>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+        <div class="sc-flash {{ 'danger' if category in ('error','danger') else category }}">
+          <i class="fa-solid {% if category == 'success' %}fa-circle-check{% elif category in ('error','danger') %}fa-triangle-exclamation{% elif category == 'warning' %}fa-circle-exclamation{% else %}fa-circle-info{% endif %}"></i>
+          {{ message }}
+        </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- ============================= WELCOME / HERO ============================= -->
+    <section class="sc-hero reveal">
+      <div class="sc-hero-grid">
+        <div>
+          <span class="sc-kicker"><i class="fa-solid fa-graduation-cap"></i> GEC Mosalehosahalli • Hassan, Karnataka</span>
+          <h1>Welcome back{% if current_user %}, {{ current_user.full_name.split()[0] }}{% else %} to Smart Campus 360{% endif %} 👋</h1>
+          <p>Your unified campus command centre — navigate buildings, recover lost belongings with AI matching, and pre-book canteen meals, all in one place.</p>
+          <div class="sc-hero-cta">
+            <a class="sc-btn sc-btn-light" href="{{ url_for('navigation.index') }}"><i class="fa-solid fa-route"></i> Explore Campus Map</a>
+            <a class="sc-btn sc-btn-ghost" href="{{ url_for('canteen.index') }}"><i class="fa-solid fa-bowl-food"></i> Order Food</a>
+            <a class="sc-btn sc-btn-ghost" href="{{ url_for('lost_found.report_item') }}"><i class="fa-solid fa-plus"></i> Report Item</a>
+          </div>
+        </div>
+
+        <div class="sc-hero-stats">
+          <div class="sc-chip"><span class="sc-chip-ic"><i class="fa-solid fa-user-graduate"></i></span><b>{{ stats.students_count }}</b><span>Active Students</span></div>
+          <div class="sc-chip"><span class="sc-chip-ic"><i class="fa-solid fa-chalkboard-user"></i></span><b>{{ stats.faculty_count }}</b><span>Faculty Members</span></div>
+          <div class="sc-chip"><span class="sc-chip-ic"><i class="fa-solid fa-door-open"></i></span><b>{{ stats.classrooms_count }}</b><span>Classrooms</span></div>
+          <div class="sc-chip"><span class="sc-chip-ic"><i class="fa-solid fa-building"></i></span><b>{{ stats.buildings_count }}</b><span>Buildings</span></div>
+          <div class="sc-hero-loc"><i class="fa-solid fa-location-dot"></i> {{ COLLEGE_NAME or 'Government Engineering College, Mosalehosahalli' }}{% if COLLEGE_LOCATION %} — {{ COLLEGE_LOCATION }}{% endif %}</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================= MAIN FEATURE CARDS ============================= -->
+    <div class="sc-section-title reveal">
+      <i class="fa-solid fa-shapes"></i><h3>Explore the Platform</h3>
+    </div>
+    <div class="sc-grid sc-cols-3" style="margin-bottom:24px">
+      <a class="sc-feature f-nav reveal" href="{{ url_for('navigation.index') }}">
+        <span class="sc-fx-tag">Module 1</span>
+        <span class="sc-fx-ic"><i class="fa-solid fa-map-location-dot"></i></span>
+        <h4>Smart Campus Navigation</h4>
+        <p>Interactive campus map with A* / Dijkstra shortest paths, exam-room finder, zoomable canvas and Street-View POIs.</p>
+        <span class="sc-fx-go">Open Navigator <i class="fa-solid fa-arrow-right"></i></span>
+      </a>
+
+      <a class="sc-feature f-lf reveal" href="{{ url_for('lost_found.index') }}">
+        <span class="sc-fx-tag">Module 2</span>
+        <span class="sc-fx-ic"><i class="fa-solid fa-brain"></i></span>
+        <h4>AI-Powered Lost &amp; Found</h4>
+        <p>Report lost or found items with photos. Image-embedding similarity plus category, colour, date and location ranking.</p>
+        <span class="sc-fx-go">Explore Matches <i class="fa-solid fa-arrow-right"></i></span>
+      </a>
+
+      <a class="sc-feature f-can reveal" href="{{ url_for('canteen.index') }}">
+        <span class="sc-fx-tag">Module 3</span>
+        <span class="sc-fx-ic"><i class="fa-solid fa-utensils"></i></span>
+        <h4>Smart Canteen Booking</h4>
+        <p>Browse the live menu, advance pickups, teacher-first priority queue, QR counter verification and refund tracking.</p>
+        <span class="sc-fx-go">Book a Meal <i class="fa-solid fa-arrow-right"></i></span>
+      </a>
+    </div>
+
+    <!-- ============================= STAT TILES ============================= -->
+    <div class="sc-grid sc-cols-3" style="margin-bottom:24px">
+      <div class="sc-glass sc-tile reveal">
+        <span class="sc-tile-ic ic-cyan"><i class="fa-solid fa-location-dot"></i></span>
+        <div><b>{{ stats.nodes_count }}</b><span>Campus locations mapped</span></div>
+      </div>
+      <div class="sc-glass sc-tile reveal">
+        <span class="sc-tile-ic ic-blue"><i class="fa-solid fa-box-open"></i></span>
+        <div><b>{{ stats.lf_total }}</b><span>Lost &amp; Found reports ({{ stats.open_lost_found }} open)</span></div>
+      </div>
+      <div class="sc-glass sc-tile reveal">
+        <span class="sc-tile-ic ic-rose"><i class="fa-solid fa-receipt"></i></span>
+        <div><b>{{ stats.active_orders_count }}</b><span>Active canteen orders ({{ stats.orders_today }} today)</span></div>
+      </div>
+      <div class="sc-glass sc-tile reveal">
+        <span class="sc-tile-ic ic-green"><i class="fa-solid fa-utensils"></i></span>
+        <div><b>{{ stats.menu_items_count }}</b><span>Menu items available now</span></div>
+      </div>
+      <div class="sc-glass sc-tile reveal">
+        <span class="sc-tile-ic ic-purple"><i class="fa-solid fa-hand-holding-circle"></i></span>
+        <div><b>{{ stats.lf_resolved }}</b><span>Items returned &amp; resolved</span></div>
+      </div>
+      <div class="sc-glass sc-tile reveal">
+        <span class="sc-tile-ic ic-amber"><i class="fa-solid fa-circle-check"></i></span>
+        <div><b>{{ stats.pending_claims }}</b><span>Claims awaiting verification</span></div>
+      </div>
+    </div>
+
+    <!-- ============================= RECENT LOST & FOUND ============================= -->
+    <div class="sc-grid sc-cols-2" style="margin-bottom:24px;align-items:start">
+      <div class="sc-glass sc-panel reveal">
+        <div class="sc-section-title" style="margin-top:0">
+          <i class="fa-solid fa-magnifying-glass-location"></i><h3>Recent Lost &amp; Found</h3>
+          <a href="{{ url_for('lost_found.index') }}">View all</a>
+        </div>
+        <ul class="sc-list">
+          {% for item in recent_lost_found %}
+          <li>
+            <a class="sc-row" href="{{ url_for('lost_found.item_detail', item_id=item.id) }}">
+              {% if item.photo_url %}
+              <img class="sc-thumb" src="{{ item.photo_url }}" alt="{{ item.title }}">
+              {% else %}
+              <span class="sc-thumb" style="display:grid;place-items:center;color:var(--sc-ink-soft)"><i class="fa-solid fa-image"></i></span>
+              {% endif %}
+              <span class="sc-row-txt">
+                <strong>{{ item.title }}</strong>
+                <small><i class="fa-solid fa-location-dot"></i> {{ item.location_reported }} · {{ item.category }}</small>
+              </span>
+              <span class="sc-badge {{ item.report_type }}">{{ item.report_type }}</span>
+            </a>
+          </li>
+          {% else %}
+          <li style="padding:16px;text-align:center;color:var(--sc-ink-soft)">No reports filed yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <!-- ============================= POPULAR CANTEEN ITEMS ============================= -->
+      <div class="sc-glass sc-panel reveal">
+        <div class="sc-section-title" style="margin-top:0">
+          <i class="fa-solid fa-fire-burner"></i><h3>Popular Canteen Items</h3>
+          <a href="{{ url_for('canteen.index') }}">Full menu</a>
+        </div>
+        <ul class="sc-list">
+          {% for entry in popular_items %}
+          {% set food = entry.item %}
+          <li>
+            <a class="sc-row" href="{{ url_for('canteen.index') }}">
+              <span class="sc-pop-rank">{{ loop.index }}</span>
+              {% if food.photo_url %}
+              <img class="sc-thumb" src="{{ food.photo_url }}" alt="{{ food.name }}">
+              {% else %}
+              <span class="sc-thumb" style="display:grid;place-items:center;color:var(--sc-ink-soft)"><i class="fa-solid fa-bowl-food"></i></span>
+              {% endif %}
+              <span class="sc-row-txt">
+                <strong>{{ food.name }}</strong>
+                <small>{% if entry.sold > 0 %}{{ entry.sold }} sold{% else %}Available now{% endif %} · {{ food.preparation_time_mins }} min</small>
+              </span>
+              <span class="sc-pop-price">₹{{ '%.0f'|format(food.price) }}</span>
+            </a>
+          </li>
+          {% else %}
+          <li style="padding:16px;text-align:center;color:var(--sc-ink-soft)">Menu is currently empty.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============================= TODAY + QUICK FINDER ============================= -->
+    <div class="sc-grid sc-cols-2" style="align-items:start">
+      <div class="sc-glass sc-panel reveal">
+        <div class="sc-section-title" style="margin-top:0">
+          <i class="fa-solid fa-calendar-day"></i><h3>Today on Campus</h3>
+        </div>
+        <ul class="sc-tl">
+          <li><strong>{{ todays_stats.orders_today }}</strong><small>food order(s) placed today</small></li>
+          <li><strong>{{ todays_stats.priority_today }}</strong><small>teacher-priority order(s) today</small></li>
+          <li><strong>{{ todays_stats.ready_now }}</strong><small>order(s) ready for pickup right now</small></li>
+          <li><strong>{{ todays_stats.reports_today }}</strong><small>new Lost &amp; Found report(s) today</small></li>
+          <li><strong>{{ todays_stats.returns_today }}</strong><small>item(s) returned &amp; closed today</small></li>
+        </ul>
+      </div>
+
+      <div class="sc-glass sc-qfind reveal">
+        <div class="sc-section-title" style="margin-top:0">
+          <i class="fa-solid fa-location-crosshairs"></i><h3>Quick Location Finder</h3>
+        </div>
+        <div class="sc-search" style="margin-left:0;width:100%">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input id="qfindInput" list="locDatalist" type="text" placeholder="Type a room, lab, library…" aria-label="Find a location">
+        </div>
+        <datalist id="locDatalist">
+          {% for loc in quick_locations %}<option value="{{ loc.name }}">{{ loc.building }}</option>{% endfor %}
+        </datalist>
+        <div class="sc-qlist" id="qfindList">
+          {% for loc in quick_locations[:10] %}
+          <a class="sc-qchip" href="{{ url_for('navigation.index') }}" data-label="{{ loc.name }} {{ loc.building }} {{ loc.category }}">
+            <i class="fa-solid fa-location-dot"></i> {{ loc.name }} <small>· {{ loc.category }}</small>
           </a>
-          <a href="{{ url_for('lost_found.index') }}" class="btn btn-outline-light btn-lg rounded-pill px-4">
-            <i class="fa-solid fa-magnifying-glass-location me-2"></i> Lost & Found
-          </a>
-        </div>
-      </div>
-      <div class="col-lg-4 d-none d-lg-block text-center">
-        <div class="bg-white bg-opacity-10 p-4 rounded-4 backdrop-blur border border-white border-opacity-25 shadow-lg">
-          <i class="fa-solid fa-building-columns fa-4x text-warning mb-3"></i>
-          <h5 class="text-white fw-bold mb-1">GEC Mosalehosahalli</h5>
-          <p class="small text-light mb-3">Hassan District, Karnataka, India</p>
-          <div class="text-start small text-light bg-black bg-opacity-25 p-3 rounded-3">
-            <div class="d-flex justify-content-between mb-1">
-              <span><i class="fa-solid fa-draw-polygon me-1 text-info"></i> Navigation Nodes:</span>
-              <span class="fw-bold text-white">{{ stats.nodes_count }}</span>
-            </div>
-            <div class="d-flex justify-content-between mb-1">
-              <span><i class="fa-solid fa-box-open me-1 text-warning"></i> Open Lost Items:</span>
-              <span class="fw-bold text-white">{{ stats.open_lost_found }}</span>
-            </div>
-            <div class="d-flex justify-content-between mb-1">
-              <span><i class="fa-solid fa-bowl-food me-1 text-danger"></i> Canteen Items:</span>
-              <span class="fw-bold text-white">{{ stats.menu_items_count }}</span>
-            </div>
-            <div class="d-flex justify-content-between">
-              <span><i class="fa-solid fa-clock-rotate-left me-1 text-success"></i> Active Orders:</span>
-              <span class="fw-bold text-white">{{ stats.active_orders_count }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Calibration & Development Transparency Notice -->
-  <div class="alert alert-info border-info border-opacity-50 d-flex align-items-center mb-4 rounded-4 shadow-sm" role="alert">
-    <i class="fa-solid fa-circle-nodes fa-2x text-info me-3"></i>
-    <div class="small">
-      <strong>Engineering Calibration Notice:</strong> This project is currently populated with 
-      <span class="badge bg-warning text-dark">clearly labeled sample data</span> for development and demonstration. 
-      Actual architecture blueprints, room details, and 360-degree photographs for GEC Mosalehosahalli can be imported directly 
-      into the MySQL database without changing any backend logic or user interfaces.
-    </div>
-  </div>
-
-  <!-- The Three Integrated Modules -->
-  <div class="row g-4 mb-5">
-    
-    <!-- Module 1: Smart Campus Navigation -->
-    <div class="col-md-4">
-      <div class="card campus-card h-100 border-top border-4 border-primary">
-        <div class="card-body p-4 d-flex flex-column">
-          <div class="d-flex justify-content-between align-items-start mb-3">
-            <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary">
-              <i class="fa-solid fa-map-location-dot fa-2x"></i>
-            </div>
-            <span class="badge bg-primary px-3 py-1 rounded-pill">Module 1</span>
-          </div>
-          <h4 class="card-title fw-bold text-primary mb-2">Smart Campus Navigation</h4>
-          <p class="card-text text-muted small flex-grow-1">
-            Search classrooms, labs, HOD chambers, offices, central library, and canteen. 
-            Interactive canvas with zoom-in, zoom-out, double-click zoom, directional arrows, 
-            A* / Dijkstra shortest-path calculations, and Street View-style photographic POIs.
-          </p>
-          <ul class="list-unstyled small text-secondary mb-4">
-            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>A* & Dijkstra Graph Pathfinding</li>
-            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Zoomable 2D Interactive Canvas</li>
-            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Street View / Point-of-Interest Photos</li>
-          </ul>
-          <a href="{{ url_for('navigation.index') }}" class="btn btn-outline-primary rounded-pill w-100 fw-bold">
-            Open Campus Navigator <i class="fa-solid fa-arrow-right ms-1"></i>
-          </a>
+          {% endfor %}
         </div>
       </div>
     </div>
 
-    <!-- Module 2: AI Lost & Found -->
-    <div class="col-md-4">
-      <div class="card campus-card h-100 border-top border-4 border-success">
-        <div class="card-body p-4 d-flex flex-column">
-          <div class="d-flex justify-content-between align-items-start mb-3">
-            <div class="rounded-circle bg-success bg-opacity-10 p-3 text-success">
-              <i class="fa-solid fa-brain fa-2x"></i>
-            </div>
-            <span class="badge bg-success px-3 py-1 rounded-pill">Module 2</span>
-          </div>
-          <h4 class="card-title fw-bold text-success mb-2">AI Lost & Found</h4>
-          <p class="card-text text-muted small flex-grow-1">
-            Report lost or found belongings on campus with photographic uploads. 
-            Powered by OpenCV visual feature vectors and cosine similarity to automatically detect 
-            and recommend potential matches, report locations, and track collection.
-          </p>
-          <ul class="list-unstyled small text-secondary mb-4">
-            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>OpenCV Multi-Channel Feature Vectors</li>
-            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Cosine Similarity Recommendation Engine</li>
-            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Verification and Collection Workflow</li>
-          </ul>
-          <a href="{{ url_for('lost_found.index') }}" class="btn btn-outline-success rounded-pill w-100 fw-bold">
-            Explore Lost & Found <i class="fa-solid fa-arrow-right ms-1"></i>
-          </a>
-        </div>
-      </div>
-    </div>
+    <footer style="margin-top:34px;text-align:center;color:var(--sc-ink-soft);font-size:0.78rem">
+      &copy; 2026 Government Engineering College, Mosalehosahalli · Smart Campus 360 ·
+      <a href="{{ url_for('main.about') }}" style="color:var(--sc-blue);text-decoration:none">About &amp; Technical Specs</a>
+    </footer>
 
-    <!-- Module 3: Smart Canteen Management -->
-    <div class="col-md-4">
-      <div class="card campus-card h-100 border-top border-4 border-danger">
-        <div class="card-body p-4 d-flex flex-column">
-          <div class="d-flex justify-content-between align-items-start mb-3">
-            <div class="rounded-circle bg-danger bg-opacity-10 p-3 text-danger">
-              <i class="fa-solid fa-bowl-food fa-2x"></i>
-            </div>
-            <span class="badge bg-danger px-3 py-1 rounded-pill">Module 3</span>
-          </div>
-          <h4 class="card-title fw-bold text-danger mb-2">Smart Canteen Booking</h4>
-          <p class="card-text text-muted small flex-grow-1">
-            Browse live daily menu, real-time inventory, and schedule advance pickups. 
-            Features exclusive <strong>Teacher-First Order Priority</strong>, automated QR code 
-            counter verification, live preparation queue, and refund tracking.
-          </p>
-          <ul class="list-unstyled small text-secondary mb-4">
-            <li class="mb-1"><i class="fa-solid fa-crown text-warning me-2"></i>Teacher-First Priority Queue System</li>
-            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Dynamic QR Code Generation for Pickup</li>
-            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Advance Time Slots & Simulated Payment</li>
-          </ul>
-          <a href="{{ url_for('canteen.index') }}" class="btn btn-outline-danger rounded-pill w-100 fw-bold">
-            Visit Smart Canteen <i class="fa-solid fa-arrow-right ms-1"></i>
-          </a>
-        </div>
-      </div>
-    </div>
+  </div><!-- /sc-main -->
 
-  </div>
-
-  <!-- Role-Based Authorization & Simulation Matrix -->
-  <div class="card campus-card border-0 shadow-sm p-4 mb-4">
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
-      <div>
-        <h4 class="fw-bold mb-1"><i class="fa-solid fa-shield-halved text-primary me-2"></i>Role-Based Access Control (RBAC) Architecture</h4>
-        <p class="text-muted small mb-0">Test any of the 5 institutional personas instantly with pre-seeded test accounts.</p>
-      </div>
-      <span class="badge bg-secondary rounded-pill px-3 py-2">5 Integrated Roles</span>
-    </div>
-
-    <div class="row g-3">
-      <div class="col-md">
-        <div class="border rounded-3 p-3 bg-light text-center h-100 d-flex flex-column justify-content-between">
-          <div>
-            <span class="badge bg-danger mb-2">Main Admin</span>
-            <h6 class="fw-bold mb-1">Global System Control</h6>
-            <p class="small text-muted mb-2">Controls all maps, nodes, photos, users, lost & found, canteen.</p>
-          </div>
-          {% if ALLOW_QUICK_SWITCH %}<a href="{{ url_for('auth.quick_switch', role='main_admin') }}" class="btn btn-sm btn-outline-danger rounded-pill w-100">Test Main Admin</a>{% endif %}
-        </div>
-      </div>
-
-      <div class="col-md">
-        <div class="border rounded-3 p-3 bg-light text-center h-100 d-flex flex-column justify-content-between">
-          <div>
-            <span class="badge bg-success mb-2">Canteen Admin</span>
-            <h6 class="fw-bold mb-1">Canteen Operations</h6>
-            <p class="small text-muted mb-2">Controls menu, stock, order preparation queue, QR scan pickup.</p>
-          </div>
-          {% if ALLOW_QUICK_SWITCH %}<a href="{{ url_for('auth.quick_switch', role='canteen_admin') }}" class="btn btn-sm btn-outline-success rounded-pill w-100">Test Canteen Admin</a>{% endif %}
-        </div>
-      </div>
-
-      <div class="col-md">
-        <div class="border rounded-3 p-3 bg-light text-center h-100 d-flex flex-column justify-content-between">
-          <div>
-            <span class="badge-teacher-priority mb-2 d-inline-block">Teacher</span>
-            <h6 class="fw-bold mb-1">Faculty Member</h6>
-            <p class="small text-muted mb-2">Receives automated <strong>Teacher-First Priority</strong> on all canteen orders.</p>
-          </div>
-          {% if ALLOW_QUICK_SWITCH %}<a href="{{ url_for('auth.quick_switch', role='teacher') }}" class="btn btn-sm btn-outline-primary rounded-pill w-100">Test Teacher</a>{% endif %}
-        </div>
-      </div>
-
-      <div class="col-md">
-        <div class="border rounded-3 p-3 bg-light text-center h-100 d-flex flex-column justify-content-between">
-          <div>
-            <span class="badge bg-primary mb-2">Student</span>
-            <h6 class="fw-bold mb-1">College Student</h6>
-            <p class="small text-muted mb-2">Access to navigation, lost & found reports, and canteen ordering.</p>
-          </div>
-          {% if ALLOW_QUICK_SWITCH %}<a href="{{ url_for('auth.quick_switch', role='student') }}" class="btn btn-sm btn-outline-primary rounded-pill w-100">Test Student</a>{% endif %}
-        </div>
-      </div>
-
-      <div class="col-md">
-        <div class="border rounded-3 p-3 bg-light text-center h-100 d-flex flex-column justify-content-between">
-          <div>
-            <span class="badge bg-secondary mb-2">Visitor</span>
-            <h6 class="fw-bold mb-1">Campus Guest</h6>
-            <p class="small text-muted mb-2">Public navigation, guest reporting, and visitor canteen pickup.</p>
-          </div>
-          {% if ALLOW_QUICK_SWITCH %}<a href="{{ url_for('auth.quick_switch', role='visitor') }}" class="btn btn-sm btn-outline-secondary rounded-pill w-100">Test Visitor</a>{% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
-{% endblock %}
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
