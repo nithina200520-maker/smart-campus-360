@@ -87,19 +87,22 @@ html[data-theme="dark"] .sc-flake { background: radial-gradient(circle at 50% 50
 @keyframes sc-fall { 0% { transform: translate3d(0, -6vh, 0); } 100% { transform: translate3d(var(--drift, 0px), 110vh, 0); } }
 @keyframes sc-twinkle { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.95; } }
 
-/* ============================== DIAGONAL "/" LIGHT RAY (in front) ============================== */
+/* ============================== DIAGONAL "/" LIGHT RAYS (in front) ============================== */
 .sc-slash { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
-.sc-slash-beam { position: absolute; top: 0; left: 0; height: 100%; width: 0; animation: sc-slashmove 12s linear infinite; }
+.sc-slash-beam { position: absolute; top: 0; left: 0; height: 100%; width: 0; }
+.sc-slash-beam.lr { animation: sc-move-lr 7s linear infinite; }
+.sc-slash-beam.rl { animation: sc-move-rl 7s linear infinite; }
 .sc-slash-line {
-  position: absolute; top: -30%; left: 0; width: 7px; height: 160%; border-radius: 8px;
+  position: absolute; top: -30%; left: 0; width: 5px; height: 160%; border-radius: 6px;
   background: linear-gradient(180deg, #22d3ee, #a78bfa, #ec4899, #fbbf24, #34d399, #22d3ee);
   background-size: 100% 200%;
-  box-shadow: 0 0 16px rgba(150,200,255,0.95), 0 0 38px rgba(160,120,255,0.65), 0 0 60px rgba(80,180,255,0.4);
-  animation: sc-slashshake 0.32s ease-in-out infinite, sc-slashhue 6s linear infinite, sc-slashflow 6s linear infinite;
+  box-shadow: 0 0 10px rgba(150,200,255,0.7), 0 0 22px rgba(160,120,255,0.4);
+  animation: sc-slashshake 0.32s ease-in-out infinite, sc-slashhue 6s linear infinite, sc-slashflow 4s linear infinite;
 }
-@keyframes sc-slashmove { 0% { transform: translateX(-32vw); opacity: 0; } 8% { opacity: 0.95; } 92% { opacity: 0.95; } 100% { transform: translateX(132vw); opacity: 0; } }
-@keyframes sc-slashshake { 0%, 100% { transform: rotate(-25deg) translateX(0); } 25% { transform: rotate(-25deg) translateX(-2.5px); } 75% { transform: rotate(-25deg) translateX(2.5px); } }
-@keyframes sc-slashhue { 0% { filter: hue-rotate(0deg) blur(0.4px) saturate(1.3); } 100% { filter: hue-rotate(360deg) blur(0.4px) saturate(1.3); } }
+@keyframes sc-move-lr { 0% { transform: translateX(-30vw); opacity: 0; } 4% { opacity: 0.8; } 46% { opacity: 0.8; } 50%, 100% { transform: translateX(130vw); opacity: 0; } }
+@keyframes sc-move-rl { 0%, 50% { transform: translateX(130vw); opacity: 0; } 54% { opacity: 0.8; } 96% { opacity: 0.8; } 100% { transform: translateX(-30vw); opacity: 0; } }
+@keyframes sc-slashshake { 0%, 100% { transform: rotate(-25deg) translateX(0); } 25% { transform: rotate(-25deg) translateX(-2px); } 75% { transform: rotate(-25deg) translateX(2px); } }
+@keyframes sc-slashhue { 0% { filter: hue-rotate(0deg) saturate(1.2); } 100% { filter: hue-rotate(360deg) saturate(1.2); } }
 @keyframes sc-slashflow { 0% { background-position: 0 0; } 100% { background-position: 0 200%; } }
 
 /* ============================== ENHANCED ANIMATIONS ============================== */
