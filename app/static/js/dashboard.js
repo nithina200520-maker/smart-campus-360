@@ -61,6 +61,20 @@
     });
   }
 
+  /* ---------- Sidebar expandable nav groups ---------- */
+  function initNavGroups() {
+    document.querySelectorAll('[data-group-toggle]').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        var group = btn.closest('.sc-nav-group');
+        if (!group) return;
+        var isOpen = group.classList.contains('open');
+        document.querySelectorAll('.sc-nav-group.open').forEach(function (g) { g.classList.remove('open'); });
+        if (!isOpen) group.classList.add('open');
+      });
+    });
+  }
+
   /* ---------- Quick Location Finder (client-side filter of real campus nodes) ---------- */
   function initQuickFinder() {
     var input = document.getElementById('qfindInput');
@@ -112,14 +126,15 @@
     els.forEach(function (e) { io.observe(e); });
   }
 
-  /* ---------- Live clock in the topbar ---------- */
+  /* ---------- Banner date + live clock ---------- */
   function initClock() {
-    var el = document.getElementById('scClock');
-    if (!el) return;
+    var dateEl = document.getElementById('scDate');
+    var timeEl = document.getElementById('scTime');
+    if (!dateEl && !timeEl) return;
     function tick() {
       var d = new Date();
-      el.textContent = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) +
-        ' • ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      if (dateEl) dateEl.textContent = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+      if (timeEl) timeEl.textContent = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     }
     tick();
     setInterval(tick, 30000);
@@ -129,6 +144,7 @@
     initThemeToggle();
     initSidebar();
     initDropdowns();
+    initNavGroups();
     initQuickFinder();
     initGlobalSearch();
     initReveal();

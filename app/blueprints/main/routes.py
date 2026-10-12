@@ -14,17 +14,23 @@ from app.utils.auth_helpers import get_current_user
 
 @main_bp.route('/')
 def index():
-    """Unified landing portal linking all 3 modules and showcasing GEC Mosalehosahalli.
+    """Unified landing portal / dashboard for Smart Campus 360.
 
-    Redesigned Phase 5 dashboard: this view now aggregates real, read-only data from
-    every module to feed the glassmorphism panels. No business logic is changed - the
-    queries below only COUNT / SELECT existing records so the dashboard never shows
-    fabricated numbers.
+    Phase 5 dashboard redesign: this view aggregates real, read-only data from every
+    module to feed the glassmorphism panels. No business logic is changed - the
+    queries below only COUNT / SELECT existing records, so the dashboard never shows
+    fabricated numbers. Where the reference mock-up used placeholder content (e.g. the
+    events timeline) we render genuine recent activity instead.
     """
     current_user = get_current_user()
     day_start = datetime.combine(datetime.today(), time.min)
 
     # --- Core aggregate statistics across the integrated modules (live DB data) ---
+    classrooms_count = NavigationNode.query.filter_by(category='Classroom').count()
+    labs_count = NavigationNode.query.filter(
+        NavigationNode.category.like('%Lab%')
+    ).count()
+
     stats = {
         # Existing keys preserved (used elsewhere / tests)
         "nodes_count": NavigationNode.query.count(),
@@ -36,7 +42,8 @@ def index():
         # Welcome-section people / place metrics
         "students_count": User.query.filter_by(role='student', is_active=True).count(),
         "faculty_count": User.query.filter(User.role == 'teacher').count(),
-        "classrooms_count": NavigationNode.query.filter_by(category='Classroom').count(),
+        "classrooms_count": classrooms_count,
+        "rooms_labs": classrooms_count + labs_count,
         "buildings_count": db.session.query(
             func.count(func.distinct(NavigationNode.building))
         ).scalar() or 0,
@@ -92,6 +99,28 @@ def index():
         ).count(),
     }
 
+    # --- Activity timeline: genuine recent records (orders + reports), newest first ---
+    timeline = []
+    for order in CanteenOrder.query.order_by(desc(CanteenOrder.created_at)).limit(4).all():
+        who = order.customer.full_name if order.customer else "Campus"
+        timeline.append({
+            "ts": order.created_at,
+            "time": order.created_at.strftime('%I:%M %p') if order.created_at else '',
+            "title": f"Order {order.order_code} placed",
+            "place": f"{who} - {'Priority' if order.is_priority else 'Standard'}",
+            "color": "amber",
+        })
+    for it in recent_lost_found[:4]:
+        timeline.append({
+            "ts": it.created_at,
+            "time": it.created_at.strftime('%I:%M %p') if it.created_at else '',
+            "title": f"{it.report_type.capitalize()} item reported",
+            "place": f"{it.title} - {it.location_reported}",
+            "color": "rose" if it.report_type == 'lost' else "green",
+        })
+    timeline.sort(key=lambda e: e["ts"] or datetime.min, reverse=True)
+    today_events = timeline[:5]
+
     # --- Quick Location Finder source list (real campus nodes) ---
     quick_locations = (
         db.session.query(
@@ -113,6 +142,7 @@ def index():
         recent_lost_found=recent_lost_found,
         popular_items=popular_items,
         todays_stats=todays_stats,
+        today_events=today_events,
         quick_locations=quick_locations,
     )
 
