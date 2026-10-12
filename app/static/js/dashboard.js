@@ -140,25 +140,24 @@
     setInterval(tick, 30000);
   }
 
-  /* ---------- Falling-sparkle "snow" shimmer (cosmetic) ---------- */
+  /* ---------- Falling star-sparkle shimmer (cosmetic; bubble balls removed) ---------- */
   function initSnow() {
     var layer = document.getElementById('scSnow');
     if (!layer) return;
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    var count = 72;
+    var count = 42;
     var frag = document.createDocumentFragment();
     for (var i = 0; i < count; i++) {
       var f = document.createElement('span');
-      var isStar = Math.random() < 0.22;
-      f.className = 'sc-flake' + (isStar ? ' star' : '');
-      var size = isStar ? (8 + Math.random() * 8) : (3 + Math.random() * 6);
+      f.className = 'sc-flake star';
+      var size = 8 + Math.random() * 10;
       f.style.left = (Math.random() * 100) + 'vw';
       f.style.setProperty('--sz', size.toFixed(1) + 'px');
-      f.style.setProperty('--dur', (9 + Math.random() * 12).toFixed(1) + 's');
+      f.style.setProperty('--dur', (10 + Math.random() * 12).toFixed(1) + 's');
       f.style.setProperty('--delay', (-Math.random() * 15).toFixed(1) + 's');
       f.style.setProperty('--drift', ((Math.random() * 2 - 1) * 90).toFixed(0) + 'px');
       f.style.setProperty('--tw', (2 + Math.random() * 3).toFixed(1) + 's');
-      if (isStar) f.textContent = '\u2726';
+      f.textContent = '\u2726';
       frag.appendChild(f);
     }
     layer.appendChild(frag);
