@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}User Profile{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row justify-content-center">
+    <div class="col-md-9 col-lg-8">
+      
+      <div class="card campus-card p-4 p-md-5 border-0 shadow-sm">
+        
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+          <div class="d-flex align-items-center gap-3">
+            <div class="bg-primary text-white p-3 rounded-circle">
+              <i class="fa-solid fa-id-badge fa-2x"></i>
+            </div>
+            <div>
+              <h3 class="fw-bold text-primary mb-1">{{ user.full_name }}</h3>
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="badge {% if user.role == 'teacher' %}badge-teacher-priority{% elif user.role == 'main_admin' %}bg-danger{% elif user.role == 'canteen_admin' %}bg-success{% else %}bg-primary{% endif %} text-uppercase px-3 py-1">
+                  {{ user.role.replace('_', ' ') }}
+                </span>
+
+                {% if user.role == 'teacher' %}
+                  {% if user.is_verified %}
+                    <span class="badge bg-success"><i class="fa-solid fa-circle-check me-1"></i> Verified Faculty</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark"><i class="fa-solid fa-clock me-1"></i> Pending Verification</span>
+                  {% endif %}
+                {% endif %}
+
+                {% if user.is_active %}
+                  <span class="badge bg-light text-success border"><i class="fa-solid fa-circle-check me-1"></i> Active</span>
+                {% else %}
+                  <span class="badge bg-danger"><i class="fa-solid fa-ban me-1"></i> Deactivated</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          <span class="badge bg-light text-muted border p-2 mt-2 mt-md-0">
+            Registered: {{ user.created_at.strftime('%d %b %Y') if user.created_at else '-' }}
+          </span>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100">
+              <label class="text-muted small fw-bold">Email Address</label>
+              <div class="fw-bold">{{ user.email }}</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100">
+              <label class="text-muted small fw-bold">Department / Division</label>
+              <div class="fw-bold">{{ user.department or 'N/A' }}</div>
+            </div>
+          </div>
+
+          {% if user.role == 'teacher' %}
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100">
+              <label class="text-muted small fw-bold">Official Employee ID</label>
+              <div class="fw-bold">{{ user.usn_or_emp_id or 'Not specified' }}</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100">
+              <label class="text-muted small fw-bold">Academic Designation</label>
+              <div class="fw-bold">{{ user.designation or 'Faculty Member' }}</div>
+            </div>
+          </div>
+          {% elif user.role == 'student' %}
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100">
+              <label class="text-muted small fw-bold">University USN</label>
+              <div class="fw-bold">{{ user.usn_or_emp_id or 'Not assigned' }}</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100">
+              <label class="text-muted small fw-bold">Current Academic Semester</label>
+              <div class="fw-bold">{{ user.semester or 'Semester N/A' }}</div>
+            </div>
+          </div>
+          {% elif user.role == 'visitor' %}
+          <div class="col-12">
+            <div class="p-3 bg-light rounded-3">
+              <label class="text-muted small fw-bold">Purpose of Campus Visit</label>
+              <div class="fw-bold">{{ user.purpose_of_visit or 'Campus Guest' }}</div>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100">
+              <label class="text-muted small fw-bold">Contact Phone</label>
+              <div class="fw-bold">{{ user.phone or 'Not provided' }}</div>
+            </div>
+          </div>
+        </div>
+
+        {% if user.role == 'teacher' %}
+          {% if user.is_verified %}
+          <div class="alert alert-teacher-priority mt-4 d-flex align-items-center rounded-3">
+            <i class="fa-solid fa-crown fa-2x me-3"></i>
+            <div>
+              <strong>Teacher-First Priority Ordering Active:</strong> 
+              Your verified faculty status gives your canteen food bookings automatic priority processing.
+            </div>
+          </div>
+          {% else %}
+          <div class="alert alert-warning mt-4 d-flex align-items-center rounded-3">
+            <i class="fa-solid fa-triangle-exclamation fa-2x me-3"></i>
+            <div>
+              <strong>Teacher Priority Pending Verification:</strong> 
+              Your employee credentials are under review by the Main Admin. Standard canteen queuing applies until verified.
+            </div>
+          </div>
+          {% endif %}
+        {% endif %}
+
+        <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+          <a href="{{ url_for('canteen.my_orders') }}" class="btn btn-outline-primary rounded-pill">
+            <i class="fa-solid fa-receipt me-1"></i> View Order History
+          </a>
+          <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger rounded-pill">
+            <i class="fa-solid fa-right-from-bracket me-1"></i> Sign Out
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

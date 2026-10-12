@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8 col-lg-5">
+      
+      <div class="card campus-card border-0 shadow-lg p-4 p-md-5">
+        <div class="text-center mb-4">
+          <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex p-3 text-primary mb-2">
+            <i class="fa-solid fa-lock fa-2x"></i>
+          </div>
+          <h3 class="fw-bold text-primary">Smart Campus 360</h3>
+          <p class="text-muted small">Sign in to your college account</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('auth.login', next=request.args.get('next')) }}">
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-secondary">Email Address</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="fa-solid fa-envelope text-muted"></i></span>
+              <input type="email" id="emailInput" name="email" class="form-control bg-light border-start-0" placeholder="name@gechassan.ac.in" required>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label fw-bold small text-secondary mb-0">Password</label>
+              <a href="{{ url_for('auth.forgot_password') }}" class="small text-decoration-none text-primary">Forgot Password?</a>
+            </div>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="fa-solid fa-key text-muted"></i></span>
+              <input type="password" id="passwordInput" name="password" class="form-control bg-light border-start-0" placeholder="••••••••" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg rounded-pill w-100 fw-bold mb-3 shadow-sm">
+            Sign In <i class="fa-solid fa-arrow-right-to-bracket ms-1"></i>
+          </button>
+        </form>
+
+        <div class="text-center small text-muted mb-4">
+          Don't have an account? <a href="{{ url_for('auth.register') }}" class="text-primary fw-bold text-decoration-none">Register here</a>
+        </div>
+
+        <!-- Quick Fill Helper for Easy Developer & Evaluator Testing -->
+        <div class="border-top pt-3">
+          <div class="text-muted small fw-bold mb-2 text-uppercase text-center"><i class="fa-solid fa-wand-magic-sparkles text-warning me-1"></i> Quick Fill Test Accounts</div>
+          <div class="d-flex flex-wrap gap-1 justify-content-center">
+            <button type="button" class="btn btn-xs btn-outline-danger rounded-pill" onclick="fillCreds('admin@gechassan.ac.in', 'Admin@123')">Main Admin</button>
+            <button type="button" class="btn btn-xs btn-outline-success rounded-pill" onclick="fillCreds('canteen@gechassan.ac.in', 'Canteen@123')">Canteen Admin</button>
+            <button type="button" class="btn btn-xs btn-outline-purple rounded-pill" onclick="fillCreds('teacher@gechassan.ac.in', 'Teacher@123')">Teacher</button>
+            <button type="button" class="btn btn-xs btn-outline-primary rounded-pill" onclick="fillCreds('student@gechassan.ac.in', 'Student@123')">Student</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill" onclick="fillCreds('visitor@gechassan.ac.in', 'Visitor@123')">Visitor</button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function fillCreds(email, pwd) {
+  document.getElementById('emailInput').value = email;
+  document.getElementById('passwordInput').value = pwd;
+}
+</script>
+{% endblock %}

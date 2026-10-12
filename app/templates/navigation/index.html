@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Smart Campus Navigation{% endblock %}
+
+{% block extra_head %}
+<style>
+  .node-pin-card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .node-pin-card:hover {
+    border-color: var(--primary);
+    background-color: #eff6ff;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-2">
+
+  <!-- Header & Calibration Notice -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <div>
+      <span class="badge bg-primary px-3 py-1 rounded-pill mb-1">
+        <i class="fa-solid fa-compass me-1"></i> Module 1: Campus Navigation
+      </span>
+      <h2 class="fw-bold text-dark mb-0">Interactive Campus Navigator & Route Finder</h2>
+      <p class="text-muted small mb-0">Search classrooms, labs, HOD chambers, offices, and view Street View photo waypoints</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
+      <span class="badge-sample-data"><i class="fa-solid fa-triangle-exclamation me-1"></i> Sample Blueprint Calibration Active</span>
+      {% if current_user and current_user.is_main_admin() %}
+        <span class="badge bg-danger rounded-pill">Admin Map Manager Enabled</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3">
+    
+    <!-- Left Navigation Controls & Search Sidebar -->
+    <div class="col-lg-4 col-xl-3">
+      <div class="card campus-card border-0 shadow-sm p-3 mb-3">
+        <h6 class="fw-bold text-dark mb-3"><i class="fa-solid fa-route text-primary me-2"></i>Route Planning Engine</h6>
+
+        <!-- Start Location -->
+        <div class="mb-3">
+          <label class="form-label small fw-bold text-secondary">Start Location</label>
+          <select id="startNodeSelect" class="form-select form-select-sm">
+            <option value="">-- Choose Starting Point --</option>
+            {% for n in nodes %}
+              <option value="{{ n.id }}" {% if n.node_code == 'NODE_MAIN_GATE' %}selected{% endif %}>
+                {{ n.name }} ({{ n.building }} - {{ n.floor }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Destination -->
+        <div class="mb-3">
+          <label class="form-label small fw-bold text-secondary">Destination</label>
+          <select id="targetNodeSelect" class="form-select form-select-sm">
+            <option value="">-- Choose Destination --</option>
+            {% for n in nodes %}
+              <option value="{{ n.id }}" {% if n.node_code == 'NODE_CANTEEN' %}selected{% endif %}>
+                {{ n.name }} ({{ n.building }} - {{ n.floor }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Algorithm Selection -->
+        <div class="mb-3">
+          <label class="form-label small fw-bold text-secondary">Pathfinding Algorithm</label>
+          <div class="btn-group w-100" role="group">
+            <input type="radio" class="btn-check" name="algoRadio" id="algoAstar" value="astar" checked>
+            <label class="btn btn-outline-primary btn-sm" for="algoAstar">A* (Heuristic)</label>
+
+            <input type="radio" class="btn-check" name="algoRadio" id="algoDijkstra" value="dijkstra">
+            <label class="btn btn-outline-primary btn-sm" for="algoDijkstra">Dijkstra</label>
+          </div>
+        </div>
+
+        <button id="btnFindRoute" class="btn btn-primary rounded-pill w-100 fw-bold shadow-sm mb-2">
+          <i class="fa-solid fa-diamond-turn-right me-1"></i> Calculate Campus Route
+        </button>
+        <button id="btnClearRoute" class="btn btn-outline-secondary btn-sm rounded-pill w-100">
+          <i class="fa-solid fa-rotate-left me-1"></i> Reset Active Path
+        </button>
+      </div>
+
+      <!-- Quick Location Search & Directory -->
+      <div class="card campus-card border-0 shadow-sm p-3">
+        <h6 class="fw-bold text-dark mb-2"><i class="fa-solid fa-magnifying-glass text-secondary me-2"></i>Campus Location Search</h6>
+        <div class="input-group input-group-sm mb-3">
+          <span class="input-group-text bg-light"><i class="fa-solid fa-search text-muted"></i></span>
+          <input type="text" id="nodeSearchInput" class="form-control" placeholder="Search classrooms, labs, offices...">
+        </div>
+
+        <div id="nodeSearchResults" class="overflow-auto" style="max-height: 280px;">
+          {% for n in nodes %}
+          <div class="node-pin-card p-2 border rounded-2 mb-2 node-item" 
+               data-id="{{ n.id }}" 
+               data-name="{{ n.name }}" 
+               data-category="{{ n.category }}"
+               data-building="{{ n.building }}"
+               onclick="selectAndFocusNode({{ n.id }}, '{{ n.name }}', {{ n.x_coord }}, {{ n.y_coord }}, '{{ n.photo_url }}', '{{ n.building }}', '{{ n.floor }}', '{{ n.description }}')">
+            <div class="d-flex justify-content-between align-items-start">
+              <span class="fw-bold small text-dark">{{ n.name }}</span>
+              <span class="badge bg-secondary" style="font-size: 0.65rem;">{{ n.category }}</span>
+            </div>
+            <div class="text-muted" style="font-size: 0.72rem;">
+              <i class="fa-solid fa-building me-1"></i> {{ n.building }} • {{ n.floor }}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Center/Right: Interactive Map Canvas & Street View HUD -->
+    <div class="col-lg-8 col-xl-9">
+      
+      <!-- Interactive Canvas Card -->
+      <div class="card campus-card border-0 shadow-sm p-2 mb-3">
+        <div class="d-flex justify-content-between align-items-center px-2 py-1">
+          <div class="small text-muted">
+            <i class="fa-solid fa-computer-mouse me-1"></i> Drag to pan • Scroll to zoom • Double-click node for Street View photo
+          </div>
+          <div id="routeSummaryBadge" class="d-none">
+            <span class="badge bg-success px-3 py-2 rounded-pill shadow-sm" id="routeStatsText">
+              <i class="fa-solid fa-person-walking me-1"></i> Calculating...
+            </span>
+          </div>
+        </div>
+
+        <div class="map-canvas-container">
+          <canvas id="campusMapCanvas" width="1000" height="650"></canvas>
+          
+          <!-- Zoom & Canvas Controls Overlay -->
+          <div class="map-controls-overlay">
+            <button class="map-ctrl-btn" id="btnZoomIn" title="Zoom In (+)">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+            <button class="map-ctrl-btn" id="btnZoomOut" title="Zoom Out (-)">
+              <i class="fa-solid fa-minus"></i>
+            </button>
+            <button class="map-ctrl-btn" id="btnResetView" title="Reset View">
+              <i class="fa-solid fa-rotate"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Turn-by-Turn Directions Panel -->
+      <div id="directionsCard" class="card campus-card border-0 shadow-sm p-3 d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="fw-bold text-dark mb-0"><i class="fa-solid fa-diamond-turn-right text-success me-2"></i>Turn-by-Turn Campus Directions</h6>
+          <span class="badge bg-primary" id="activeAlgorithmBadge">A* ROUTE</span>
+        </div>
+        <div id="directionsList">
+          <!-- Populated by JavaScript upon route calculation -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Street View-style Photographic Waypoint Modal -->
+<div class="modal fade" id="streetViewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content overflow-hidden border-0 shadow-lg">
+      <div class="modal-header bg-dark text-white border-0 py-2">
+        <h6 class="modal-title fw-bold" id="svModalTitle">
+          <i class="fa-solid fa-camera text-warning me-2"></i>Street View Photographic Waypoint
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="streetview-viewport">
+          <img id="svModalImg" src="/static/images/placeholder_node.jpg" alt="Waypoint POV Photo" class="streetview-img">
+          
+          <div class="streetview-overlay-hud">
+            <div class="d-flex justify-content-between align-items-end">
+              <div>
+                <span class="badge bg-warning text-dark px-2 py-1 mb-1" id="svModalBadge">Laboratory</span>
+                <h5 class="fw-bold mb-0 text-white" id="svModalName">Computer Science Department</h5>
+                <p class="small text-light mb-0" id="svModalLocation">Academic Block A • 1st Floor</p>
+              </div>
+              <span class="badge-sample-data">Sample Photography</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer bg-light py-2 px-3 d-flex justify-content-between">
+        <p class="small text-muted mb-0" id="svModalDesc">Real college photographs can be imported directly into this waypoint without code changes.</p>
+        <button type="button" class="btn btn-sm btn-secondary rounded-pill" data-bs-dismiss="modal">Close View</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
+{% endblock %}

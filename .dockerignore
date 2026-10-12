@@ -1,0 +1,37 @@
+# ==============================================================================
+# SMART CAMPUS 360 - Docker Build Exclusions
+# Keeps secrets and local state OUT of the image (they are bind-mounted instead)
+# ==============================================================================
+
+# --- Secrets / local configuration (never bake into image) ---
+.env
+.env.*
+!.env.example
+
+# --- Local database (bind-mounted at runtime from ./instance) ---
+instance/
+
+# --- Runtime uploads (bind-mounted at runtime; would bloat image) ---
+app/static/uploads/
+
+# --- Python artifacts ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- VCS / IDE ---
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# --- Docker files themselves (not needed inside image) ---
+Dockerfile
+compose.yaml
+.dockerignore
+
+# --- Misc ---
+*.md
+backups/

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}My Canteen Orders{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-3">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="fw-bold text-dark mb-0"><i class="fa-solid fa-receipt text-danger me-2"></i>My Canteen Orders</h2>
+      <p class="text-muted small mb-0">Track preparation, access pickup QR verification codes, and review refunds</p>
+    </div>
+    <a href="{{ url_for('canteen.index') }}" class="btn btn-warning rounded-pill px-4 fw-bold">
+      <i class="fa-solid fa-plus me-1"></i> Order Food
+    </a>
+  </div>
+
+  <div class="card campus-card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">Order Code</th>
+              <th>Placed On</th>
+              <th>Pickup Time</th>
+              <th>Items</th>
+              <th>Priority</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th class="pe-4 text-end">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for o in orders %}
+            <tr>
+              <td class="ps-4">
+                <span class="fw-bold font-monospace text-primary">#{{ o.order_code }}</span>
+              </td>
+              <td class="small text-muted">{{ o.created_at.strftime('%d %b %Y, %H:%M') }}</td>
+              <td>
+                <div class="fw-bold text-dark">{{ o.pickup_time.strftime('%H:%M') }}</div>
+                <div class="small text-muted">{{ o.pickup_time.strftime('%d %b %Y') }}</div>
+              </td>
+              <td>{{ o.items|length }} item(s)</td>
+              <td>
+                {% if o.is_priority %}
+                  <span class="badge badge-teacher-priority"><i class="fa-solid fa-crown me-1"></i> Teacher</span>
+                {% else %}
+                  <span class="badge bg-light text-muted border">Standard</span>
+                {% endif %}
+              </td>
+              <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}</td>
+              <td>
+                <span class="badge {% if o.order_status == 'collected' %}bg-success{% elif o.order_status == 'ready' %}bg-info text-dark{% elif o.order_status == 'preparing' %}bg-warning text-dark{% elif o.order_status == 'cancelled' or o.order_status == 'refunded' %}bg-danger{% else %}bg-primary{% endif %} text-uppercase">
+                  {{ o.order_status }}
+                </span>
+              </td>
+              <td class="pe-4 text-end">
+                <a href="{{ url_for('canteen.order_detail', order_code=o.order_code) }}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                  <i class="fa-solid fa-qrcode me-1"></i> View QR
+                </a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="8" class="text-center py-5 text-muted">
+                <i class="fa-solid fa-receipt fa-3x text-muted mb-3 d-block"></i>
+                You haven't placed any canteen orders yet.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

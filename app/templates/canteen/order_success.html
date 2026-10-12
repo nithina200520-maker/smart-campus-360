@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Order #{{ order.order_code }} Confirmed{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      
+      <div class="card campus-card border-0 shadow-lg p-4 p-md-5 text-center">
+        
+        <!-- Status Icon -->
+        <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex p-3 text-success mb-3 mx-auto">
+          <i class="fa-solid fa-circle-check fa-3x"></i>
+        </div>
+
+        <h3 class="fw-bold text-dark mb-1">Canteen Booking Confirmed!</h3>
+        <p class="text-muted small mb-3">Order Tracking Code: <strong class="font-monospace text-primary">#{{ order.order_code }}</strong></p>
+
+        <!-- Priority Flag Badge -->
+        <div class="mb-4">
+          {% if order.is_priority %}
+            <span class="badge badge-teacher-priority fs-6 px-4 py-2 shadow-sm">
+              <i class="fa-solid fa-crown me-1"></i> TEACHER-FIRST PRIORITY ORDER
+            </span>
+          {% else %}
+            <span class="badge bg-light text-muted border px-3 py-2">
+              Standard Queue Order
+            </span>
+          {% endif %}
+        </div>
+
+        <!-- Generated QR Code Display -->
+        <div class="bg-light p-4 rounded-4 d-inline-block mx-auto mb-4 border">
+          {% if order.qr_code_path %}
+            <img src="{{ url_for('static', filename=order.qr_code_path) }}" alt="Pickup QR Code" class="img-fluid rounded-3 shadow-sm" style="max-width: 220px;">
+          {% else %}
+            <div class="p-4 text-muted">
+              <i class="fa-solid fa-qrcode fa-5x"></i>
+            </div>
+          {% endif %}
+          <div class="small text-muted mt-2 fw-bold text-uppercase">
+            <i class="fa-solid fa-mobile-screen me-1"></i> Present QR at Canteen Counter
+          </div>
+        </div>
+
+        <!-- Order Information Table -->
+        <div class="text-start bg-light p-3 rounded-3 mb-4">
+          <div class="row g-2 small">
+            <div class="col-6 text-muted">Customer Name:</div>
+            <div class="col-6 fw-bold text-end">{{ order.customer.full_name }} ({{ order.user_role_at_order.title() }})</div>
+            
+            <div class="col-6 text-muted">Scheduled Pickup:</div>
+            <div class="col-6 fw-bold text-end text-primary">{{ order.pickup_time.strftime('%d %b %Y at %H:%M') }}</div>
+
+            <div class="col-6 text-muted">Order Status:</div>
+            <div class="col-6 fw-bold text-end text-uppercase">
+              <span class="badge {% if order.order_status == 'collected' %}bg-success{% elif order.order_status == 'ready' %}bg-info text-dark{% elif order.order_status == 'preparing' %}bg-warning text-dark{% else %}bg-primary{% endif %}">
+                {{ order.order_status }}
+              </span>
+            </div>
+
+            <div class="col-6 text-muted">Payment Status:</div>
+            <div class="col-6 fw-bold text-end text-success text-uppercase">{{ order.payment_status }} ({{ order.payment_method }})</div>
+
+            <div class="col-6 text-muted">Total Paid:</div>
+            <div class="col-6 fw-bold text-end fs-6 text-dark">₹{{ "%.2f"|format(order.total_amount) }}</div>
+          </div>
+        </div>
+
+        <!-- Line items -->
+        <div class="text-start mb-4">
+          <h6 class="fw-bold text-dark mb-2">Dishes in this Order:</h6>
+          <ul class="list-group list-group-flush small">
+            {% for it in order.items %}
+            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+              <span>{{ it.quantity }}x {{ it.item_name }}</span>
+              <span class="fw-bold">₹{{ "%.2f"|format(it.subtotal) }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <!-- Actions -->
+        <div class="d-flex flex-wrap gap-2 justify-content-center">
+          <a href="{{ url_for('canteen.my_orders') }}" class="btn btn-outline-primary rounded-pill px-4">
+            <i class="fa-solid fa-list-check me-1"></i> View All My Orders
+          </a>
+          <a href="{{ url_for('canteen.index') }}" class="btn btn-primary rounded-pill px-4">
+            <i class="fa-solid fa-bowl-food me-1"></i> Order More Food
+          </a>
+
+          {% if order.order_status in ['placed', 'preparing'] %}
+          <form method="POST" action="{{ url_for('canteen.cancel_order', order_id=order.id) }}" onsubmit="return confirm('Are you sure you want to cancel this order and initiate a refund?');">
+            <button type="submit" class="btn btn-outline-danger rounded-pill px-4">
+              <i class="fa-solid fa-ban me-1"></i> Cancel & Refund
+            </button>
+          </form>
+          {% endif %}
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

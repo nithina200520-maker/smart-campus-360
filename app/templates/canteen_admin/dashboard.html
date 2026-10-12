@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Canteen Operations Hub{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-3">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <div>
+      <span class="badge bg-success text-uppercase px-3 py-1 rounded-pill mb-1">
+        <i class="fa-solid fa-utensils me-1"></i> Canteen Operations
+      </span>
+      <h2 class="fw-bold text-dark mb-0">Live Kitchen & Preparation Queue</h2>
+      <p class="text-muted small mb-0">Automated Teacher-First Priority scheduling and rapid pickup verification</p>
+    </div>
+    <div class="d-flex gap-2 mt-2 mt-md-0">
+      <a href="{{ url_for('canteen_admin.menu_manage') }}" class="btn btn-outline-success rounded-pill">
+        <i class="fa-solid fa-bars-progress me-1"></i> Manage Menu & Stock
+      </a>
+      <a href="{{ url_for('canteen.index') }}" class="btn btn-outline-secondary rounded-pill">
+        <i class="fa-solid fa-eye me-1"></i> View Customer Menu
+      </a>
+    </div>
+  </div>
+
+  <!-- Priority Information Banner -->
+  <div class="alert alert-teacher-priority d-flex align-items-center shadow-sm rounded-4 mb-4" role="alert">
+    <i class="fa-solid fa-crown fa-2x me-3"></i>
+    <div>
+      <strong>Teacher-First Priority Queue Protocol Active:</strong> 
+      Orders placed by faculty members (<span class="badge badge-teacher-priority">TEACHER PRIORITY</span>) are automatically sorted to the top of the kitchen preparation line to ensure prompt service.
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    
+    <!-- Left Column: Live Queue -->
+    <div class="col-lg-8">
+      <div class="card campus-card border-0 shadow-sm mb-4">
+        <div class="campus-card-header bg-white d-flex justify-content-between align-items-center">
+          <span class="fw-bold text-dark"><i class="fa-solid fa-list-check text-primary me-2"></i>Active Orders Queue ({{ active_orders|length }})</span>
+          <span class="badge bg-primary rounded-pill">Real-Time Refresh</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-4">Order Code</th>
+                  <th>Customer</th>
+                  <th>Priority</th>
+                  <th>Pickup Time</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th class="pe-4 text-end">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for o in active_orders %}
+                <tr class="{% if o.is_priority %}table-warning table-opacity-25{% endif %}">
+                  <td class="ps-4">
+                    <span class="fw-bold font-monospace text-primary">#{{ o.order_code }}</span>
+                  </td>
+                  <td>
+                    <div class="fw-bold text-dark">{{ o.customer.full_name }}</div>
+                    <div class="small text-muted text-uppercase">{{ o.user_role_at_order }}</div>
+                  </td>
+                  <td>
+                    {% if o.is_priority %}
+                      <span class="badge badge-teacher-priority"><i class="fa-solid fa-crown me-1"></i> TEACHER</span>
+                    {% else %}
+                      <span class="badge bg-light text-muted border">Standard</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="fw-bold text-dark">{{ o.pickup_time.strftime('%H:%M') }}</div>
+                    <div class="small text-muted">{{ o.pickup_time.strftime('%d %b') }}</div>
+                  </td>
+                  <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}</td>
+                  <td>
+                    <span class="badge {% if o.order_status == 'placed' %}bg-primary{% elif o.order_status == 'preparing' %}bg-warning text-dark{% elif o.order_status == 'ready' %}bg-info text-dark{% else %}bg-secondary{% endif %} text-uppercase">
+                      {{ o.order_status }}
+                    </span>
+                  </td>
+                  <td class="pe-4 text-end">
+                    <form method="POST" action="{{ url_for('canteen_admin.update_order_status', order_id=o.id) }}" class="d-inline">
+                      {% if o.order_status == 'placed' %}
+                        <input type="hidden" name="new_status" value="preparing">
+                        <button type="submit" class="btn btn-sm btn-warning rounded-pill px-3">Start Prep</button>
+                      {% elif o.order_status == 'preparing' %}
+                        <input type="hidden" name="new_status" value="ready">
+                        <button type="submit" class="btn btn-sm btn-info rounded-pill px-3">Mark Ready</button>
+                      {% elif o.order_status == 'ready' %}
+                        <input type="hidden" name="new_status" value="collected">
+                        <button type="submit" class="btn btn-sm btn-success rounded-pill px-3">Mark Collected</button>
+                      {% endif %}
+                    </form>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="7" class="text-center text-muted py-5">
+                    <i class="fa-solid fa-clipboard-check fa-3x text-muted mb-3 d-block"></i>
+                    All active orders have been served! Kitchen queue is clear.
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Completed Orders -->
+      <div class="card campus-card border-0 shadow-sm">
+        <div class="campus-card-header bg-white">
+          <span class="fw-bold text-dark"><i class="fa-solid fa-clock-rotate-left text-secondary me-2"></i>Recently Completed / Collected Orders</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 small">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-4">Order Code</th>
+                  <th>Customer</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Collected At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for o in recent_completed %}
+                <tr>
+                  <td class="ps-4 fw-bold font-monospace">#{{ o.order_code }}</td>
+                  <td>{{ o.customer.full_name }} ({{ o.user_role_at_order }})</td>
+                  <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}</td>
+                  <td>
+                    <span class="badge {% if o.order_status == 'collected' %}bg-success{% elif o.order_status == 'refunded' %}bg-danger{% else %}bg-secondary{% endif %}">
+                      {{ o.order_status|upper }}
+                    </span>
+                  </td>
+                  <td class="text-muted">{{ o.collected_at.strftime('%Y-%m-%d %H:%M') if o.collected_at else '-' }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="5" class="text-center text-muted py-3">No completed orders yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: QR Verification & Quick Metrics -->
+    <div class="col-lg-4">
+      
+      <!-- Instant Pickup Verification -->
+      <div class="card campus-card border-0 shadow-sm mb-4">
+        <div class="campus-card-header bg-white">
+          <span class="fw-bold text-dark"><i class="fa-solid fa-qrcode text-primary me-2"></i>Pickup QR Code Verification</span>
+        </div>
+        <div class="card-body p-4">
+          <p class="small text-muted mb-3">
+            Scan the customer's QR code with a barcode scanner or manually enter the Order Code to verify pickup.
+          </p>
+          <form method="POST" action="{{ url_for('canteen_admin.verify_pickup') }}">
+            <div class="input-group mb-3">
+              <span class="input-group-text bg-light"><i class="fa-solid fa-barcode"></i></span>
+              <input type="text" name="order_code" class="form-control text-uppercase" placeholder="ORD-20261012-XXXX" required>
+            </div>
+            <button type="submit" class="btn btn-primary rounded-pill w-100 fw-bold">
+              <i class="fa-solid fa-check-double me-1"></i> Verify & Handover
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Inventory Low-Stock Alert -->
+      <div class="card campus-card border-0 shadow-sm">
+        <div class="campus-card-header bg-white d-flex justify-content-between align-items-center">
+          <span class="fw-bold text-dark"><i class="fa-solid fa-triangle-exclamation text-warning me-2"></i>Low Inventory Warnings</span>
+          <a href="{{ url_for('canteen_admin.menu_manage') }}" class="btn btn-xs btn-outline-secondary">Restock</a>
+        </div>
+        <div class="card-body p-3">
+          {% if low_stock_items %}
+            <div class="list-group list-group-flush">
+              {% for it in low_stock_items %}
+              <div class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                <div>
+                  <div class="fw-bold text-dark">{{ it.name }}</div>
+                  <div class="small text-muted">₹{{ "%.2f"|format(it.price) }}</div>
+                </div>
+                <span class="badge bg-danger rounded-pill">{{ it.stock_quantity }} left</span>
+              </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-3 small">
+              <i class="fa-solid fa-circle-check text-success fa-2x mb-2 d-block"></i>
+              All menu items have sufficient inventory.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

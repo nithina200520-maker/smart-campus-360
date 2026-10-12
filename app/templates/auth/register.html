@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Register Account{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row justify-content-center">
+    <div class="col-md-9 col-lg-7">
+      
+      <div class="card campus-card border-0 shadow-lg p-4 p-md-5">
+        <div class="text-center mb-4">
+          <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex p-3 text-primary mb-2">
+            <i class="fa-solid fa-user-plus fa-2x"></i>
+          </div>
+          <h3 class="fw-bold text-primary">Join Smart Campus 360</h3>
+          <p class="text-muted small">Government Engineering College, Mosalehosahalli (Hassan)</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('auth.register') }}">
+          
+          <!-- Role Selection Tabs -->
+          <div class="mb-4">
+            <label class="form-label fw-bold small text-secondary">Select Your Institutional Role <span class="text-danger">*</span></label>
+            <div class="btn-group w-100 shadow-sm" role="group">
+              <input type="radio" class="btn-check" name="role" id="roleStudent" value="student" checked onchange="updateRoleFields()">
+              <label class="btn btn-outline-primary fw-bold" for="roleStudent">
+                <i class="fa-solid fa-user-graduate me-1"></i> Student
+              </label>
+
+              <input type="radio" class="btn-check" name="role" id="roleTeacher" value="teacher" onchange="updateRoleFields()">
+              <label class="btn btn-outline-primary fw-bold" for="roleTeacher">
+                <i class="fa-solid fa-chalkboard-user me-1"></i> Teacher (Faculty)
+              </label>
+
+              <input type="radio" class="btn-check" name="role" id="roleVisitor" value="visitor" onchange="updateRoleFields()">
+              <label class="btn btn-outline-primary fw-bold" for="roleVisitor">
+                <i class="fa-solid fa-street-view me-1"></i> Campus Visitor
+              </label>
+            </div>
+          </div>
+
+          <!-- Teacher Verification Advisory Banner (shows when Teacher selected) -->
+          <div id="teacherAdvisory" class="alert alert-teacher-priority rounded-3 mb-4 d-none">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <i class="fa-solid fa-shield-halved"></i>
+              <strong>Faculty Verification Protocol:</strong>
+            </div>
+            <div class="small">
+              Teacher accounts require administrative verification of your Employee ID by the Main Admin. 
+              Once verified, your account automatically receives <strong>Teacher-First Priority queue status</strong> on all canteen orders.
+            </div>
+          </div>
+
+          <!-- Visitor Access Guidance Banner (shows when Visitor selected) -->
+          <div id="visitorAdvisory" class="alert alert-info rounded-3 mb-4 d-none">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <i class="fa-solid fa-circle-info"></i>
+              <strong>Visitor Access Guidelines:</strong>
+            </div>
+            <div class="small">
+              Visitors enjoy unrestricted access to public campus navigation, waypoints, and guest canteen booking without accessing internal student/staff directories.
+            </div>
+          </div>
+
+          <!-- Common Personal Fields -->
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Full Name <span class="text-danger">*</span></label>
+              <input type="text" name="full_name" class="form-control" placeholder="e.g. Ramesh Kumar / Sneha Patil" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Email Address <span class="text-danger">*</span></label>
+              <input type="email" name="email" class="form-control" placeholder="name@gechassan.ac.in" required>
+            </div>
+          </div>
+
+          <!-- Dynamic Department Field (Student & Teacher) -->
+          <div id="deptSection" class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Department / Branch <span class="text-danger">*</span></label>
+              <select name="department" id="departmentInput" class="form-select">
+                <option value="Computer Science & Engineering" selected>Computer Science & Engineering</option>
+                <option value="Electronics & Communication Engineering">Electronics & Communication Engineering</option>
+                <option value="Mechanical Engineering">Mechanical Engineering</option>
+                <option value="Civil Engineering">Civil Engineering</option>
+                <option value="Basic Science & Humanities">Basic Science & Humanities</option>
+                <option value="Campus Administration">Campus Administration</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Phone Number</label>
+              <input type="text" name="phone" class="form-control" placeholder="+91 98450 XXXXX">
+            </div>
+          </div>
+
+          <!-- Student-Only Fields: USN & Semester -->
+          <div id="studentFields" class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">University USN <span class="text-danger">*</span></label>
+              <input type="text" name="usn" id="usnInput" class="form-control text-uppercase" placeholder="e.g. 4GH22CS045">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Current Semester</label>
+              <select name="semester" class="form-select">
+                <option value="1st Semester">1st Semester</option>
+                <option value="2nd Semester">2nd Semester</option>
+                <option value="3rd Semester">3rd Semester</option>
+                <option value="4th Semester">4th Semester</option>
+                <option value="5th Semester" selected>5th Semester</option>
+                <option value="6th Semester">6th Semester</option>
+                <option value="7th Semester">7th Semester</option>
+                <option value="8th Semester">8th Semester</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Teacher-Only Fields: Employee ID & Designation -->
+          <div id="teacherFields" class="row g-3 mb-3 d-none">
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Official Employee ID <span class="text-danger">*</span></label>
+              <input type="text" name="employee_id" id="empIdInput" class="form-control text-uppercase" placeholder="e.g. EMP-CSE-042">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Academic Designation <span class="text-danger">*</span></label>
+              <select name="designation" class="form-select">
+                <option value="Assistant Professor" selected>Assistant Professor</option>
+                <option value="Associate Professor">Associate Professor</option>
+                <option value="Professor">Professor</option>
+                <option value="Professor & HOD">Professor & HOD</option>
+                <option value="Technical Instructor">Technical Instructor</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Visitor-Only Fields: Purpose of Visit -->
+          <div id="visitorFields" class="row g-3 mb-3 d-none">
+            <div class="col-12">
+              <label class="form-label fw-bold small text-secondary">Purpose of Campus Visit <span class="text-danger">*</span></label>
+              <select name="purpose_of_visit" class="form-select">
+                <option value="Parent Meeting / Faculty Interaction">Parent Meeting / Faculty Interaction</option>
+                <option value="Prospective Student Admission Enquiry">Prospective Student Admission Enquiry</option>
+                <option value="Academic Seminar / Conference Guest">Academic Seminar / Conference Guest</option>
+                <option value="Campus Facilities Tour">Campus Facilities Tour</option>
+                <option value="Official / Vendor Visit">Official / Vendor Visit</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Password Fields -->
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Password <span class="text-danger">*</span></label>
+              <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+              <div class="form-text small">At least 8 chars with letters & numbers.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Confirm Password <span class="text-danger">*</span></label>
+              <input type="password" name="confirm_password" class="form-control" placeholder="••••••••" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg rounded-pill w-100 fw-bold mb-3 shadow">
+            Create Account <i class="fa-solid fa-arrow-right ms-1"></i>
+          </button>
+        </form>
+
+        <div class="text-center small text-muted">
+          Already registered? <a href="{{ url_for('auth.login') }}" class="text-primary fw-bold text-decoration-none">Sign in here</a>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function updateRoleFields() {
+  const isStudent = document.getElementById('roleStudent').checked;
+  const isTeacher = document.getElementById('roleTeacher').checked;
+  const isVisitor = document.getElementById('roleVisitor').checked;
+
+  const teacherAdvisory = document.getElementById('teacherAdvisory');
+  const visitorAdvisory = document.getElementById('visitorAdvisory');
+  const deptSection = document.getElementById('deptSection');
+  const studentFields = document.getElementById('studentFields');
+  const teacherFields = document.getElementById('teacherFields');
+  const visitorFields = document.getElementById('visitorFields');
+
+  const usnInput = document.getElementById('usnInput');
+  const empIdInput = document.getElementById('empIdInput');
+
+  if (isStudent) {
+    teacherAdvisory.classList.add('d-none');
+    visitorAdvisory.classList.add('d-none');
+    deptSection.classList.remove('d-none');
+    studentFields.classList.remove('d-none');
+    teacherFields.classList.add('d-none');
+    visitorFields.classList.add('d-none');
+    usnInput.required = true;
+    empIdInput.required = false;
+  } else if (isTeacher) {
+    teacherAdvisory.classList.remove('d-none');
+    visitorAdvisory.classList.add('d-none');
+    deptSection.classList.remove('d-none');
+    studentFields.classList.add('d-none');
+    teacherFields.classList.remove('d-none');
+    visitorFields.classList.add('d-none');
+    usnInput.required = false;
+    empIdInput.required = true;
+  } else if (isVisitor) {
+    teacherAdvisory.classList.add('d-none');
+    visitorAdvisory.classList.remove('d-none');
+    studentFields.classList.add('d-none');
+    teacherFields.classList.add('d-none');
+    visitorFields.classList.remove('d-none');
+    usnInput.required = false;
+    empIdInput.required = false;
+  }
+}
+document.addEventListener('DOMContentLoaded', updateRoleFields);
+</script>
+{% endblock %}

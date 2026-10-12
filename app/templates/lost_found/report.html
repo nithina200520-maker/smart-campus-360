@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Report Lost or Found Item{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      
+      <div class="card campus-card border-0 shadow-lg p-4 p-md-5">
+        
+        <div class="d-flex align-items-center gap-3 mb-4">
+          <div class="bg-success text-white p-3 rounded-circle">
+            <i class="fa-solid fa-bullhorn fa-2x"></i>
+          </div>
+          <div>
+            <h3 class="fw-bold text-dark mb-0">Report Campus Item</h3>
+            <p class="text-muted small mb-0">Upload details and item photograph for AI similarity indexing</p>
+          </div>
+        </div>
+
+        <!-- AI Similarity Info Banner -->
+        <div class="alert alert-success d-flex align-items-center rounded-3 mb-4" role="alert">
+          <i class="fa-solid fa-wand-magic-sparkles fa-2x text-success me-3"></i>
+          <div class="small">
+            <strong>AI Auto-Matching Enabled:</strong> 
+            When you upload an item photo, the system extracts an OpenCV color-spatial embedding and compares it against opposite reports (e.g. Lost vs. Found) to suggest potential matches instantly.
+          </div>
+        </div>
+
+        <form method="POST" action="{{ url_for('lost_found.report_item') }}" enctype="multipart/form-data">
+          
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Report Type <span class="text-danger">*</span></label>
+              <select name="report_type" class="form-select" required>
+                <option value="lost">I LOST an item</option>
+                <option value="found">I FOUND an item</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Category <span class="text-danger">*</span></label>
+              <select name="category" class="form-select" required>
+                {% for c in categories %}
+                  <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-secondary">Item Title / Headline <span class="text-danger">*</span></label>
+            <input type="text" name="title" class="form-control" placeholder="e.g. Blue Stainless Steel Flask / Casio Scientific Calculator" required>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Campus Location <span class="text-danger">*</span></label>
+              <input type="text" name="location_reported" class="form-control" placeholder="e.g. CSE Lab 2 / Canteen Terrace / Central Library" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold small text-secondary">Contact Phone Number</label>
+              <input type="text" name="contact_phone" class="form-control" value="{{ user.phone or '' }}" placeholder="+91 98450 XXXXX">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-secondary">Item Description & Identifiers <span class="text-danger">*</span></label>
+            <textarea name="description" rows="3" class="form-control" placeholder="Mention color, brand, scratches, USN stickers, keychains, or unique marks..." required></textarea>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-bold small text-secondary">Item Photograph (JPG / PNG / WEBP)</label>
+            <input type="file" name="photo" class="form-control" accept="image/*">
+            <div class="form-text small">Uploading a clear photo allows our AI engine to perform visual similarity comparisons.</div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+            <a href="{{ url_for('lost_found.index') }}" class="btn btn-outline-secondary rounded-pill px-4">Cancel</a>
+            <button type="submit" class="btn btn-success btn-lg rounded-pill px-5 fw-bold shadow-sm">
+              <i class="fa-solid fa-paper-plane me-1"></i> Submit Report
+            </button>
+          </div>
+
+        </form>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

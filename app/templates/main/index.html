@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Unified Campus Portal{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4">
+
+  <!-- Hero Section -->
+  <div class="p-4 p-md-5 mb-4 rounded-4 text-white shadow" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 70%, #0d9488 100%);">
+    <div class="row align-items-center">
+      <div class="col-lg-8">
+        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold mb-3 shadow-sm">
+          <i class="fa-solid fa-graduation-cap me-1"></i> GEC MOSALEHOSAHALLI (HASSAN)
+        </span>
+        <h1 class="display-5 fw-bold text-white mb-2">Smart Campus 360</h1>
+        <p class="lead text-light mb-4">
+          The next-generation unified web application integrating <strong>Campus Navigation</strong>, 
+          <strong>AI-Powered Lost & Found</strong>, and <strong>Smart Canteen Management</strong>.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+          <a href="{{ url_for('navigation.index') }}" class="btn btn-primary btn-lg rounded-pill px-4 shadow">
+            <i class="fa-solid fa-map-location-dot me-2"></i> Explore Campus Map
+          </a>
+          <a href="{{ url_for('canteen.index') }}" class="btn btn-warning btn-lg rounded-pill px-4 shadow">
+            <i class="fa-solid fa-utensils me-2"></i> Order Food (Canteen)
+          </a>
+          <a href="{{ url_for('lost_found.index') }}" class="btn btn-outline-light btn-lg rounded-pill px-4">
+            <i class="fa-solid fa-magnifying-glass-location me-2"></i> Lost & Found
+          </a>
+        </div>
+      </div>
+      <div class="col-lg-4 d-none d-lg-block text-center">
+        <div class="bg-white bg-opacity-10 p-4 rounded-4 backdrop-blur border border-white border-opacity-25 shadow-lg">
+          <i class="fa-solid fa-building-columns fa-4x text-warning mb-3"></i>
+          <h5 class="text-white fw-bold mb-1">GEC Mosalehosahalli</h5>
+          <p class="small text-light mb-3">Hassan District, Karnataka, India</p>
+          <div class="text-start small text-light bg-black bg-opacity-25 p-3 rounded-3">
+            <div class="d-flex justify-content-between mb-1">
+              <span><i class="fa-solid fa-draw-polygon me-1 text-info"></i> Navigation Nodes:</span>
+              <span class="fw-bold text-white">{{ stats.nodes_count }}</span>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+              <span><i class="fa-solid fa-box-open me-1 text-warning"></i> Open Lost Items:</span>
+              <span class="fw-bold text-white">{{ stats.open_lost_found }}</span>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+              <span><i class="fa-solid fa-bowl-food me-1 text-danger"></i> Canteen Items:</span>
+              <span class="fw-bold text-white">{{ stats.menu_items_count }}</span>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span><i class="fa-solid fa-clock-rotate-left me-1 text-success"></i> Active Orders:</span>
+              <span class="fw-bold text-white">{{ stats.active_orders_count }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calibration & Development Transparency Notice -->
+  <div class="alert alert-info border-info border-opacity-50 d-flex align-items-center mb-4 rounded-4 shadow-sm" role="alert">
+    <i class="fa-solid fa-circle-nodes fa-2x text-info me-3"></i>
+    <div class="small">
+      <strong>Engineering Calibration Notice:</strong> This project is currently populated with 
+      <span class="badge bg-warning text-dark">clearly labeled sample data</span> for development and demonstration. 
+      Actual architecture blueprints, room details, and 360-degree photographs for GEC Mosalehosahalli can be imported directly 
+      into the MySQL database without changing any backend logic or user interfaces.
+    </div>
+  </div>
+
+  <!-- The Three Integrated Modules -->
+  <div class="row g-4 mb-5">
+    
+    <!-- Module 1: Smart Campus Navigation -->
+    <div class="col-md-4">
+      <div class="card campus-card h-100 border-top border-4 border-primary">
+        <div class="card-body p-4 d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary">
+              <i class="fa-solid fa-map-location-dot fa-2x"></i>
+            </div>
+            <span class="badge bg-primary px-3 py-1 rounded-pill">Module 1</span>
+          </div>
+          <h4 class="card-title fw-bold text-primary mb-2">Smart Campus Navigation</h4>
+          <p class="card-text text-muted small flex-grow-1">
+            Search classrooms, labs, HOD chambers, offices, central library, and canteen. 
+            Interactive canvas with zoom-in, zoom-out, double-click zoom, directional arrows, 
+            A* / Dijkstra shortest-path calculations, and Street View-style photographic POIs.
+          </p>
+          <ul class="list-unstyled small text-secondary mb-4">
+            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>A* & Dijkstra Graph Pathfinding</li>
+            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Zoomable 2D Interactive Canvas</li>
+            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Street View / Point-of-Interest Photos</li>
+          </ul>
+          <a href="{{ url_for('navigation.index') }}" class="btn btn-outline-primary rounded-pill w-100 fw-bold">
+            Open Campus Navigator <i class="fa-solid fa-arrow-right ms-1"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Module 2: AI Lost & Found -->
+    <div class="col-md-4">
+      <div class="card campus-card h-100 border-top border-4 border-success">
+        <div class="card-body p-4 d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="rounded-circle bg-success bg-opacity-10 p-3 text-success">
+              <i class="fa-solid fa-brain fa-2x"></i>
+            </div>
+            <span class="badge bg-success px-3 py-1 rounded-pill">Module 2</span>
+          </div>
+          <h4 class="card-title fw-bold text-success mb-2">AI Lost & Found</h4>
+          <p class="card-text text-muted small flex-grow-1">
+            Report lost or found belongings on campus with photographic uploads. 
+            Powered by OpenCV visual feature vectors and cosine similarity to automatically detect 
+            and recommend potential matches, report locations, and track collection.
+          </p>
+          <ul class="list-unstyled small text-secondary mb-4">
+            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>OpenCV Multi-Channel Feature Vectors</li>
+            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Cosine Similarity Recommendation Engine</li>
+            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Verification and Collection Workflow</li>
+          </ul>
+          <a href="{{ url_for('lost_found.index') }}" class="btn btn-outline-success rounded-pill w-100 fw-bold">
+            Explore Lost & Found <i class="fa-solid fa-arrow-right ms-1"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Module 3: Smart Canteen Management -->
+    <div class="col-md-4">
+      <div class="card campus-card h-100 border-top border-4 border-danger">
+        <div class="card-body p-4 d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="rounded-circle bg-danger bg-opacity-10 p-3 text-danger">
+              <i class="fa-solid fa-bowl-food fa-2x"></i>
+            </div>
+            <span class="badge bg-danger px-3 py-1 rounded-pill">Module 3</span>
+          </div>
+          <h4 class="card-title fw-bold text-danger mb-2">Smart Canteen Booking</h4>
+          <p class="card-text text-muted small flex-grow-1">
+            Browse live daily menu, real-time inventory, and schedule advance pickups. 
+            Features exclusive <strong>Teacher-First Order Priority</strong>, automated QR code 
+            counter verification, live preparation queue, and refund tracking.
+          </p>
+          <ul class="list-unstyled small text-secondary mb-4">
+            <li class="mb-1"><i class="fa-solid fa-crown text-warning me-2"></i>Teacher-First Priority Queue System</li>
+            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Dynamic QR Code Generation for Pickup</li>
+            <li class="mb-1"><i class="fa-solid fa-check text-success me-2"></i>Advance Time Slots & Simulated Payment</li>
+          </ul>
+          <a href="{{ url_for('canteen.index') }}" class="btn btn-outline-danger rounded-pill w-100 fw-bold">
+            Visit Smart Canteen <i class="fa-solid fa-arrow-right ms-1"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Role-Based Authorization & Simulation Matrix -->
+  <div class="card campus-card border-0 shadow-sm p-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+      <div>
+        <h4 class="fw-bold mb-1"><i class="fa-solid fa-shield-halved text-primary me-2"></i>Role-Based Access Control (RBAC) Architecture</h4>
+        <p class="text-muted small mb-0">Test any of the 5 institutional personas instantly with pre-seeded test accounts.</p>
+      </div>
+      <span class="badge bg-secondary rounded-pill px-3 py-2">5 Integrated Roles</span>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md">
+        <div class="border rounded-3 p-3 bg-light text-center h-100 d-flex flex-column justify-content-between">
+          <div>
+            <span class="badge bg-danger mb-2">Main Admin</span>
+            <h6 class="fw-bold mb-1">Global System Control</h6>
+            <p class="small text-muted mb-2">Controls all maps, nodes, photos, users, lost & found, canteen.</p>
+          </div>
+          {% if ALLOW_QUICK_SWITCH %}<a href="{{ url_for('auth.quick_switch', role='main_admin') }}" class="btn btn-sm btn-outline-danger rounded-pill w-100">Test Main Admin</a>{% endif %}
+        </div>
+      </div>
+
+      <div class="col-md">
+        <div class="border rounded-3 p-3 bg-light text-center h-100 d-flex flex-column justify-content-between">
+          <div>
+            <span class="badge bg-success mb-2">Canteen Admin</span>
+            <h6 class="fw-bold mb-1">Canteen Operations</h6>
+            <p class="small text-muted mb-2">Controls menu, stock, order preparation queue, QR scan pickup.</p>
+          </div>
+          {% if ALLOW_QUICK_SWITCH %}<a href="{{ url_for('auth.quick_switch', role='canteen_admin') }}" class="btn btn-sm btn-outline-success rounded-pill w-100">Test Canteen Admin</a>{% endif %}
+        </div>
+      </div>
+
+      <div class="col-md">
+        <div class="border rounded-3 p-3 bg-light text-center h-100 d-flex flex-column justify-content-between">
+          <div>
+            <span class="badge-teacher-priority mb-2 d-inline-block">Teacher</span>
+            <h6 class="fw-bold mb-1">Faculty Member</h6>
+            <p class="small text-muted mb-2">Receives automated <strong>Teacher-First Priority</strong> on all canteen orders.</p>
+          </div>
+          {% if ALLOW_QUICK_SWITCH %}<a href="{{ url_for('auth.quick_switch', role='teacher') }}" class="btn btn-sm btn-outline-primary rounded-pill w-100">Test Teacher</a>{% endif %}
+        </div>
+      </div>
+
+      <div class="col-md">
+        <div class="border rounded-3 p-3 bg-light text-center h-100 d-flex flex-column justify-content-between">
+          <div>
+            <span class="badge bg-primary mb-2">Student</span>
+            <h6 class="fw-bold mb-1">College Student</h6>
+            <p class="small text-muted mb-2">Access to navigation, lost & found reports, and canteen ordering.</p>
+          </div>
+          {% if ALLOW_QUICK_SWITCH %}<a href="{{ url_for('auth.quick_switch', role='student') }}" class="btn btn-sm btn-outline-primary rounded-pill w-100">Test Student</a>{% endif %}
+        </div>
+      </div>
+
+      <div class="col-md">
+        <div class="border rounded-3 p-3 bg-light text-center h-100 d-flex flex-column justify-content-between">
+          <div>
+            <span class="badge bg-secondary mb-2">Visitor</span>
+            <h6 class="fw-bold mb-1">Campus Guest</h6>
+            <p class="small text-muted mb-2">Public navigation, guest reporting, and visitor canteen pickup.</p>
+          </div>
+          {% if ALLOW_QUICK_SWITCH %}<a href="{{ url_for('auth.quick_switch', role='visitor') }}" class="btn btn-sm btn-outline-secondary rounded-pill w-100">Test Visitor</a>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

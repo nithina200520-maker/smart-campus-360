@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}{{ item.title }} | AI Lost & Found{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  
+  <div class="mb-3">
+    <a href="{{ url_for('lost_found.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill">
+      <i class="fa-solid fa-arrow-left me-1"></i> Back to Registry
+    </a>
+  </div>
+
+  <div class="row g-4 mb-4">
+    
+    <!-- Item Details Card -->
+    <div class="col-lg-7">
+      <div class="card campus-card border-0 shadow-sm p-4">
+        
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div>
+            <span class="badge {% if item.report_type == 'lost' %}bg-danger{% else %}bg-success{% endif %} text-uppercase px-3 py-1 mb-2">
+              {{ item.report_type }}
+            </span>
+            <span class="badge bg-secondary mb-2">{{ item.category }}</span>
+            <h3 class="fw-bold text-dark mb-1">{{ item.title }}</h3>
+          </div>
+          <span class="badge bg-dark px-3 py-2 text-uppercase">{{ item.status }}</span>
+        </div>
+
+        {% if item.photo_url %}
+        <div class="rounded-3 overflow-hidden mb-4 border" style="max-height: 380px;">
+          <img src="{{ item.photo_url }}" alt="{{ item.title }}" class="w-100 h-100 object-fit-cover">
+        </div>
+        {% endif %}
+
+        <h6 class="fw-bold text-dark mb-2">Description & Details</h6>
+        <p class="text-secondary mb-4">{{ item.description }}</p>
+
+        <div class="row g-3 p-3 bg-light rounded-3 mb-4">
+          <div class="col-sm-6">
+            <span class="text-muted small fw-bold d-block">Reported Location</span>
+            <span class="fw-bold text-dark"><i class="fa-solid fa-location-dot text-danger me-1"></i> {{ item.location_reported }}</span>
+          </div>
+          <div class="col-sm-6">
+            <span class="text-muted small fw-bold d-block">Incident Timestamp</span>
+            <span class="fw-bold text-dark"><i class="fa-solid fa-clock text-primary me-1"></i> {{ item.date_time_reported.strftime('%d %b %Y, %H:%M') }}</span>
+          </div>
+          <div class="col-sm-6">
+            <span class="text-muted small fw-bold d-block">Reported By</span>
+            {% if mask_contact %}
+              <span class="fw-bold text-muted"><i class="fa-solid fa-lock me-1 small"></i> Restricted (Visitor Access)</span>
+            {% else %}
+              <span class="fw-bold text-dark">{{ item.reporter.full_name }} ({{ item.reporter.role.title() }})</span>
+            {% endif %}
+          </div>
+          <div class="col-sm-6">
+            <span class="text-muted small fw-bold d-block">Contact</span>
+            {% if mask_contact %}
+              <span class="fw-bold text-muted">Contact details hidden from visitor accounts</span>
+            {% else %}
+              <span class="fw-bold text-dark">{{ item.contact_phone or 'Available via Admin' }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if item.status == 'open' and current_user and current_user.id != item.user_id %}
+        <form method="POST" action="{{ url_for('lost_found.claim_item', item_id=item.id) }}">
+          <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+            <i class="fa-solid fa-hand-holding-hand me-1"></i> Claim This Item (Verify Ownership)
+          </button>
+        </form>
+        {% endif %}
+
+      </div>
+    </div>
+
+    <!-- AI Matches Side Panel -->
+    <div class="col-lg-5">
+      <div class="card campus-card border-0 shadow-sm p-4">
+        
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <i class="fa-solid fa-brain text-success fa-xl"></i>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">AI Image Similarity Matches</h5>
+            <div class="small text-muted">Automated OpenCV visual recommendations</div>
+          </div>
+        </div>
+
+        {% if matches %}
+          <p class="small text-muted mb-3">
+            Our image comparison model detected possible correlation with the following counterpart reports:
+          </p>
+
+          <div class="list-group list-group-flush">
+            {% for m in matches %}
+              {% set counterpart = m.found_item if item.report_type == 'lost' else m.lost_item %}
+              <div class="list-group-item p-3 border rounded-3 mb-2 bg-light">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                  <span class="badge badge-ai-match">
+                    <i class="fa-solid fa-check-double me-1"></i> {{ (m.similarity_score * 100)|round(1) }}% Match Score
+                  </span>
+                  <span class="badge bg-secondary text-uppercase">{{ counterpart.report_type }}</span>
+                </div>
+
+                <h6 class="fw-bold text-dark mb-1">{{ counterpart.title }}</h6>
+                <div class="small text-muted mb-2">
+                  <i class="fa-solid fa-location-dot me-1 text-danger"></i> {{ counterpart.location_reported }}
+                </div>
+                <p class="small text-muted mb-2 text-truncate">{{ counterpart.description }}</p>
+
+                <a href="{{ url_for('lost_found.item_detail', item_id=counterpart.id) }}" class="btn btn-xs btn-outline-success rounded-pill">
+                  View Matching Item <i class="fa-solid fa-arrow-right ms-1"></i>
+                </a>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-center py-4 bg-light rounded-3">
+            <i class="fa-solid fa-magnifying-glass-chart fa-3x text-muted mb-2 d-block"></i>
+            <h6 class="fw-bold text-dark mb-1">No AI Similarity Matches Found Yet</h6>
+            <p class="small text-muted mb-0 px-3">
+              When another user reports a counterpart item with a similar photo, the AI model will automatically index and list it here.
+            </p>
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

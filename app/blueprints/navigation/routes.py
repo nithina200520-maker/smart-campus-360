@@ -1,0 +1,62 @@
+from flask import render_template, request, jsonify, flash, redirect, url_for
+from app.blueprints.navigation import navigation_bp
+from app.models import NavigationNode, NavigationEdge
+from app.utils.auth_helpers import get_current_user, role_required
+from app.utils.pathfinding import find_route
+
+@navigation_bp.route('/')
+def index():
+    """Module 1: Interactive Campus Navigator foundation."""
+    user = get_current_user()
+    nodes = NavigationNode.query.order_by(NavigationNode.building.asc(), NavigationNode.name.asc()).all()
+    categories = sorted(list(set(n.category for n in nodes)))
+    buildings = sorted(list(set(n.building for n in nodes)))
+
+    return render_template(
+        'navigation/index.html',
+        user=user,
+        nodes=nodes,
+        categories=categories,
+        buildings=buildings
+    )
+
+@navigation_bp.route('/api/nodes', methods=['GET'])
+def get_nodes_api():
+    """API endpoint providing all navigation nodes for map canvas rendering."""
+    nodes = NavigationNode.query.all()
+    return jsonify({
+        "success": True,
+        "nodes": [n.to_dict() for n in nodes]
+    })
+
+@navigation_bp.route('/api/route', methods=['POST'])
+def calculate_route_api():
+    """
+    Computes optimal path between start and destination nodes
+    using A* or Dijkstra graph traversal.
+    """
+    data = request.get_json() or {}
+    start_id = data.get('start_node_id')
+    target_id = data.get('target_node_id')
+    algorithm = data.get('algorithm', 'astar').lower()
+
+    if not start_id or not target_id:
+        return jsonify({"success": False, "error": "Start and destination nodes are required."}), 400
+
+    if start_id == target_id:
+        return jsonify({"success": False, "error": "Start and destination cannot be identical."}), 400
+
+    route_result = find_route(int(start_id), int(target_id), algorithm=algorithm)
+    if not route_result:
+        return jsonify({"success": False, "error": "No viable path could be calculated between these two locations."}), 404
+
+    return jsonify(route_result)
+
+@navigation_bp.route('/api/node/<int:node_id>', methods=['GET'])
+def get_node_detail_api(node_id):
+    """Fetches single node details with street-view / point of interest photo."""
+    node = NavigationNode.query.get_or_404(node_id)
+    return jsonify({
+        "success": True,
+        "node": node.to_dict()
+    })

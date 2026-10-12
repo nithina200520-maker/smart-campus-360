@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Main Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-3">
+
+  <!-- Header Banner -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <div>
+      <span class="badge bg-danger text-uppercase px-3 py-1 rounded-pill mb-1">
+        <i class="fa-solid fa-shield-halved me-1"></i> Main Administration
+      </span>
+      <h2 class="fw-bold text-dark mb-0">System Control Center</h2>
+      <p class="text-muted small mb-0">Unified management across Navigation, AI Lost & Found, and Smart Canteen</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2 mt-2 mt-md-0">
+      <a href="{{ url_for('admin.create_canteen_admin') }}" class="btn btn-outline-success rounded-pill">
+        <i class="fa-solid fa-user-plus me-1"></i> Create Canteen Admin
+      </a>
+      <a href="{{ url_for('admin.audit_logs') }}" class="btn btn-outline-dark rounded-pill">
+        <i class="fa-solid fa-list-check me-1"></i> Security Audit Logs
+      </a>
+      <a href="{{ url_for('admin.users_list') }}" class="btn btn-outline-primary rounded-pill">
+        <i class="fa-solid fa-users-gear me-1"></i> User Accounts
+      </a>
+    </div>
+  </div>
+
+  <!-- Pending Teacher Verification Alert -->
+  {% if stats.pending_teachers_count > 0 %}
+  <div class="alert alert-warning border-warning shadow-sm rounded-4 d-flex justify-content-between align-items-center mb-4" role="alert">
+    <div class="d-flex align-items-center gap-3">
+      <i class="fa-solid fa-chalkboard-user fa-2x text-warning"></i>
+      <div>
+        <strong class="fs-6">Action Required: {{ stats.pending_teachers_count }} Faculty Account(s) Awaiting Verification</strong>
+        <p class="small text-dark mb-0">Review submitted Employee IDs to unlock Teacher-First Priority queue status for canteen orders.</p>
+      </div>
+    </div>
+    <a href="{{ url_for('admin.users_list', pending='1') }}" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm">
+      Review & Verify Faculty <i class="fa-solid fa-arrow-right ms-1"></i>
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- KPI Metric Cards Across All Modules -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+      <div class="card campus-card border-0 shadow-sm p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small fw-bold text-uppercase">Total Users</div>
+            <h3 class="fw-bold mb-0 text-primary">{{ stats.total_users }}</h3>
+            <div class="small text-muted mt-1">Across 5 roles</div>
+          </div>
+          <div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle">
+            <i class="fa-solid fa-users fa-xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <div class="card campus-card border-0 shadow-sm p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small fw-bold text-uppercase">Faculty Verification</div>
+            <h3 class="fw-bold mb-0 {% if stats.pending_teachers_count > 0 %}text-warning{% else %}text-success{% endif %}">
+              {{ stats.pending_teachers_count }} Pending
+            </h3>
+            <div class="small text-muted mt-1">Teacher Priority Queue</div>
+          </div>
+          <div class="bg-warning bg-opacity-10 text-warning p-3 rounded-circle">
+            <i class="fa-solid fa-id-card-clip fa-xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <div class="card campus-card border-0 shadow-sm p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small fw-bold text-uppercase">Navigation POIs</div>
+            <h3 class="fw-bold mb-0 text-info">{{ stats.total_nodes }}</h3>
+            <div class="small text-muted mt-1">{{ stats.total_edges }} Route edges connected</div>
+          </div>
+          <div class="bg-info bg-opacity-10 text-info p-3 rounded-circle">
+            <i class="fa-solid fa-draw-polygon fa-xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <div class="card campus-card border-0 shadow-sm p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small fw-bold text-uppercase">Canteen Revenue</div>
+            <h3 class="fw-bold mb-0 text-success">₹{{ "%.2f"|format(stats.total_revenue) }}</h3>
+            <div class="small text-muted mt-1">{{ stats.total_orders }} Orders processed</div>
+          </div>
+          <div class="bg-success bg-opacity-10 text-success p-3 rounded-circle">
+            <i class="fa-solid fa-indian-rupee-sign fa-xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <!-- Module Control Hub -->
+    <div class="col-lg-8">
+      <div class="card campus-card border-0 shadow-sm">
+        <div class="campus-card-header bg-white d-flex justify-content-between align-items-center">
+          <span class="fw-bold text-dark"><i class="fa-solid fa-sliders text-primary me-2"></i>Integrated Module Operations</span>
+          <span class="badge bg-success rounded-pill">All Systems Active</span>
+        </div>
+        <div class="card-body p-4">
+          
+          <div class="row g-3 mb-4">
+            <div class="col-md-4">
+              <div class="p-3 border rounded-3 bg-light text-center">
+                <i class="fa-solid fa-map-location-dot fa-2x text-primary mb-2"></i>
+                <h6 class="fw-bold mb-1">Campus Navigation</h6>
+                <p class="small text-muted mb-2">Graph nodes, floorplans, photo POIs</p>
+                <a href="{{ url_for('navigation.index') }}" class="btn btn-sm btn-primary rounded-pill w-100">Open Map Module</a>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="p-3 border rounded-3 bg-light text-center">
+                <i class="fa-solid fa-brain fa-2x text-success mb-2"></i>
+                <h6 class="fw-bold mb-1">AI Lost & Found</h6>
+                <p class="small text-muted mb-2">Item reports, similarity matches, claims</p>
+                <a href="{{ url_for('lost_found.index') }}" class="btn btn-sm btn-success rounded-pill w-100">Review Registry</a>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="p-3 border rounded-3 bg-light text-center">
+                <i class="fa-solid fa-kitchen-set fa-2x text-danger mb-2"></i>
+                <h6 class="fw-bold mb-1">Canteen Operations</h6>
+                <p class="small text-muted mb-2">Live queue, priority orders, menus</p>
+                <a href="{{ url_for('canteen_admin.dashboard') }}" class="btn btn-sm btn-danger rounded-pill w-100">Canteen Queue</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Audit Logs Header -->
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold text-dark mb-0"><i class="fa-solid fa-clock-rotate-left text-secondary me-2"></i>Recent Security & Audit Logs</h6>
+            <a href="{{ url_for('admin.audit_logs') }}" class="btn btn-xs btn-outline-primary rounded-pill">Full Audit Explorer <i class="fa-solid fa-arrow-right ms-1"></i></a>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle small mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Module</th>
+                  <th>Action</th>
+                  <th>Details</th>
+                  <th>IP Address</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for audit in recent_audits %}
+                <tr>
+                  <td class="text-nowrap text-muted">{{ audit.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td><span class="badge bg-secondary">{{ audit.module }}</span></td>
+                  <td class="fw-bold text-primary">{{ audit.action }}</td>
+                  <td>{{ audit.details or '-' }}</td>
+                  <td class="text-muted">{{ audit.ip_address or '127.0.0.1' }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="5" class="text-center text-muted py-3">No audit entries recorded yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- User Accounts Side Panel -->
+    <div class="col-lg-4">
+      <div class="card campus-card border-0 shadow-sm">
+        <div class="campus-card-header bg-white d-flex justify-content-between align-items-center">
+          <span class="fw-bold text-dark"><i class="fa-solid fa-users me-2 text-primary"></i>Recently Active Users</span>
+          <a href="{{ url_for('admin.users_list') }}" class="btn btn-xs btn-outline-primary rounded-pill">View All</a>
+        </div>
+        <div class="card-body p-3">
+          <div class="list-group list-group-flush">
+            {% for u in recent_users %}
+            <div class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+              <div>
+                <div class="fw-bold text-dark">{{ u.full_name }}</div>
+                <div class="small text-muted">{{ u.email }}</div>
+              </div>
+              <div class="text-end">
+                <span class="badge {% if u.role == 'teacher' %}badge-teacher-priority{% elif u.role == 'main_admin' %}bg-danger{% elif u.role == 'canteen_admin' %}bg-success{% else %}bg-primary{% endif %} text-uppercase d-block mb-1">
+                  {{ u.role.replace('_', ' ') }}
+                </span>
+                {% if u.role == 'teacher' %}
+                  {% if u.is_verified %}
+                    <span class="badge bg-success" style="font-size: 0.65rem;">Verified</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Pending</span>
+                  {% endif %}
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

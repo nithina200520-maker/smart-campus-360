@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-3">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <div>
+      <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-outline-secondary rounded-pill mb-2">
+        <i class="fa-solid fa-arrow-left me-1"></i> Admin Dashboard
+      </a>
+      <h2 class="fw-bold text-dark mb-0">Campus User Directory & Access Control</h2>
+      <p class="text-muted small mb-0">Manage roles, verify faculty credentials for priority queueing, and suspend/activate accounts</p>
+    </div>
+    <div class="d-flex gap-2 mt-2 mt-md-0">
+      <a href="{{ url_for('admin.create_canteen_admin') }}" class="btn btn-success rounded-pill px-3 shadow-sm">
+        <i class="fa-solid fa-user-plus me-1"></i> Provision Canteen Admin
+      </a>
+      <a href="{{ url_for('admin.audit_logs') }}" class="btn btn-outline-dark rounded-pill px-3">
+        <i class="fa-solid fa-list-check me-1"></i> View Audit Logs
+      </a>
+    </div>
+  </div>
+
+  <!-- Role and Verification Quick Filters -->
+  <div class="card campus-card border-0 shadow-sm p-3 mb-4">
+    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+      <div class="d-flex flex-wrap gap-1">
+        <a href="{{ url_for('admin.users_list') }}" class="btn btn-sm {% if not current_role and not pending_only %}btn-primary{% else %}btn-outline-secondary{% endif %} rounded-pill">
+          All Users ({{ users|length }})
+        </a>
+        <a href="{{ url_for('admin.users_list', pending='1') }}" class="btn btn-sm {% if pending_only %}btn-warning text-dark fw-bold{% else %}btn-outline-warning text-dark{% endif %} rounded-pill position-relative">
+          <i class="fa-solid fa-clock me-1"></i> Pending Faculty Verifications
+          {% if pending_teachers_count > 0 %}
+            <span class="badge rounded-pill bg-danger ms-1">{{ pending_teachers_count }}</span>
+          {% endif %}
+        </a>
+        <a href="{{ url_for('admin.users_list', role='teacher') }}" class="btn btn-sm {% if current_role == 'teacher' %}btn-primary{% else %}btn-outline-secondary{% endif %} rounded-pill">
+          Faculty
+        </a>
+        <a href="{{ url_for('admin.users_list', role='student') }}" class="btn btn-sm {% if current_role == 'student' %}btn-primary{% else %}btn-outline-secondary{% endif %} rounded-pill">
+          Students
+        </a>
+        <a href="{{ url_for('admin.users_list', role='canteen_admin') }}" class="btn btn-sm {% if current_role == 'canteen_admin' %}btn-primary{% else %}btn-outline-secondary{% endif %} rounded-pill">
+          Canteen Staff
+        </a>
+        <a href="{{ url_for('admin.users_list', role='visitor') }}" class="btn btn-sm {% if current_role == 'visitor' %}btn-primary{% else %}btn-outline-secondary{% endif %} rounded-pill">
+          Visitors
+        </a>
+      </div>
+
+      <div class="small text-muted">
+        <i class="fa-solid fa-shield-halved text-success me-1"></i> RBAC Security Active
+      </div>
+    </div>
+  </div>
+
+  <div class="card campus-card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">User Details</th>
+              <th>Department / Metadata</th>
+              <th>Role</th>
+              <th>Faculty Verification</th>
+              <th>Status</th>
+              <th>Modify Role</th>
+              <th class="pe-4 text-end">Administrative Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr class="{% if u.role == 'teacher' and not u.is_verified %}table-warning table-opacity-25{% endif %}">
+              <td class="ps-4">
+                <div class="fw-bold text-dark">{{ u.full_name }}</div>
+                <div class="small text-muted">{{ u.email }}</div>
+                {% if u.phone %}
+                  <div class="small text-muted"><i class="fa-solid fa-phone me-1" style="font-size: 0.7rem;"></i>{{ u.phone }}</div>
+                {% endif %}
+              </td>
+              <td>
+                <div class="fw-bold small">{{ u.department or 'N/A' }}</div>
+                {% if u.role == 'teacher' %}
+                  <div class="small text-muted">{{ u.designation or 'Faculty' }} • ID: {{ u.usn_or_emp_id or '-' }}</div>
+                {% elif u.role == 'student' %}
+                  <div class="small text-muted">USN: {{ u.usn_or_emp_id or '-' }} • {{ u.semester or '-' }}</div>
+                {% elif u.role == 'visitor' %}
+                  <div class="small text-muted">Purpose: {{ u.purpose_of_visit or 'Campus Guest' }}</div>
+                {% else %}
+                  <div class="small text-muted">Emp ID: {{ u.usn_or_emp_id or '-' }}</div>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge {% if u.role == 'teacher' %}badge-teacher-priority{% elif u.role == 'main_admin' %}bg-danger{% elif u.role == 'canteen_admin' %}bg-success{% else %}bg-primary{% endif %} text-uppercase">
+                  {{ u.role.replace('_', ' ') }}
+                </span>
+              </td>
+              <td>
+                {% if u.role == 'teacher' %}
+                  {% if u.is_verified %}
+                    <span class="badge bg-success"><i class="fa-solid fa-circle-check me-1"></i> Verified Faculty</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark"><i class="fa-solid fa-clock me-1"></i> Pending Verification</span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted small">N/A</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if u.is_active %}
+                  <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                    <i class="fa-solid fa-check me-1"></i> Active
+                  </span>
+                {% else %}
+                  <span class="badge bg-danger">
+                    <i class="fa-solid fa-ban me-1"></i> Deactivated
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                <form method="POST" action="{{ url_for('admin.change_user_role', user_id=u.id) }}" class="d-flex gap-1 align-items-center">
+                  <select name="new_role" class="form-select form-select-sm" style="width: auto;">
+                    <option value="student" {% if u.role == 'student' %}selected{% endif %}>Student</option>
+                    <option value="teacher" {% if u.role == 'teacher' %}selected{% endif %}>Teacher</option>
+                    <option value="canteen_admin" {% if u.role == 'canteen_admin' %}selected{% endif %}>Canteen Admin</option>
+                    <option value="main_admin" {% if u.role == 'main_admin' %}selected{% endif %}>Main Admin</option>
+                    <option value="visitor" {% if u.role == 'visitor' %}selected{% endif %}>Visitor</option>
+                  </select>
+                  <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+                </form>
+              </td>
+              <td class="pe-4 text-end">
+                <div class="d-flex gap-1 justify-content-end">
+                  
+                  <!-- Teacher Verification Action Button -->
+                  {% if u.role == 'teacher' %}
+                    {% if not u.is_verified %}
+                      <form method="POST" action="{{ url_for('admin.verify_teacher', user_id=u.id) }}">
+                        <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm" title="Approve Employee ID and unlock Teacher-First Priority queue status">
+                          <i class="fa-solid fa-check me-1"></i> Verify
+                        </button>
+                      </form>
+                    {% else %}
+                      <form method="POST" action="{{ url_for('admin.revoke_teacher', user_id=u.id) }}">
+                        <button type="submit" class="btn btn-sm btn-outline-warning rounded-pill px-2" title="Revoke teacher verification">
+                          Revoke
+                        </button>
+                      </form>
+                    {% endif %}
+                  {% endif %}
+
+                  <!-- Activate / Suspend Button -->
+                  {% if u.role != 'main_admin' %}
+                  <form method="POST" action="{{ url_for('admin.toggle_user_status', user_id=u.id) }}">
+                    {% if u.is_active %}
+                      <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2">Deactivate</button>
+                    {% else %}
+                      <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-2">Activate</button>
+                    {% endif %}
+                  </form>
+                  {% else %}
+                    <span class="badge bg-light text-muted border">Protected Admin</span>
+                  {% endif %}
+
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" class="text-center py-5 text-muted">
+                <i class="fa-solid fa-users fa-3x text-muted mb-3 d-block"></i>
+                No users found matching the selected filter criteria.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

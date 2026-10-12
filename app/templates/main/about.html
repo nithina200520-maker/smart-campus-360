@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}About System & Institution{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      
+      <!-- Institutional Information Card -->
+      <div class="card campus-card p-4 p-md-5 mb-4 border-0 shadow-sm">
+        <div class="d-flex align-items-center gap-3 mb-4">
+          <div class="bg-primary text-white p-3 rounded-circle">
+            <i class="fa-solid fa-building-columns fa-2x"></i>
+          </div>
+          <div>
+            <span class="badge bg-primary px-3 py-1 rounded-pill mb-1">Institutional Profile</span>
+            <h2 class="fw-bold text-primary mb-0">Government Engineering College, Mosalehosahalli</h2>
+            <p class="text-muted mb-0">Hassan District, Karnataka, India • Affiliated to VTU Belagavi</p>
+          </div>
+        </div>
+
+        <p class="lead text-secondary">
+          <strong>Smart Campus 360</strong> is an AI-powered unified digital campus solution designed to elevate the student, faculty, and visitor experience across the campus of Government Engineering College, Mosalehosahalli (Hassan).
+        </p>
+
+        <hr class="my-4">
+
+        <h4 class="fw-bold text-dark mb-3"><i class="fa-solid fa-layer-group text-primary me-2"></i>Integrated Architecture Principles</h4>
+        <div class="row g-3 mb-4">
+          <div class="col-md-4">
+            <div class="border rounded-3 p-3 bg-light h-100">
+              <h6 class="fw-bold text-primary"><i class="fa-solid fa-map-location-dot me-1"></i> Module 1: Navigation</h6>
+              <p class="small text-muted mb-0">
+                A* and Dijkstra graph-based shortest path calculation across multi-floor academic blocks, featuring interactive canvas map rendering, directional cues, and Street View-style photographic waypoints.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded-3 p-3 bg-light h-100">
+              <h6 class="fw-bold text-success"><i class="fa-solid fa-brain me-1"></i> Module 2: AI Lost & Found</h6>
+              <p class="small text-muted mb-0">
+                Visual feature vector extraction powered by OpenCV and cosine similarity distance metrics to pair lost items with found items across the campus registry, complete with verification audits.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded-3 p-3 bg-light h-100">
+              <h6 class="fw-bold text-danger"><i class="fa-solid fa-utensils me-1"></i> Module 3: Smart Canteen</h6>
+              <p class="small text-muted mb-0">
+                Advance food booking with automated Teacher-First Priority queue scheduling, live inventory deduction, QR code verification for counter pickup, and cancellation refunds.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <h4 class="fw-bold text-dark mb-3"><i class="fa-solid fa-database text-warning me-2"></i>Extensibility & Future Data Import</h4>
+        <div class="alert alert-secondary border-0 rounded-3">
+          <p class="small mb-2">
+            The database is structured to decouple application logic from campus geographical data:
+          </p>
+          <ul class="small mb-0">
+            <li><strong>Actual Photographs:</strong> Can be uploaded to <code>/static/uploads/navigation/</code> and linked to node codes.</li>
+            <li><strong>CAD Coordinates & Blueprints:</strong> Floor plans can be exported to standard PNG/SVG canvas maps and node coordinates mapped via the Main Admin Map Manager.</li>
+            <li><strong>Department & Lab expansion:</strong> New buildings, laboratories, and seminar halls can be added dynamically without code modifications.</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

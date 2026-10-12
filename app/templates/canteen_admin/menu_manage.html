@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Canteen Menu{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-3">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <div>
+      <a href="{{ url_for('canteen_admin.dashboard') }}" class="btn btn-sm btn-outline-secondary rounded-pill mb-2">
+        <i class="fa-solid fa-arrow-left me-1"></i> Live Kitchen Queue
+      </a>
+      <h2 class="fw-bold text-dark mb-0">Canteen Menu & Stock Manager</h2>
+      <p class="text-muted small mb-0">Update menu offerings, live pricing, and inventory quantities</p>
+    </div>
+    <button class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#addItemModal">
+      <i class="fa-solid fa-plus me-1"></i> Add New Dish
+    </button>
+  </div>
+
+  <div class="card campus-card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">Item Name</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Stock</th>
+              <th>Prep Time</th>
+              <th>Availability</th>
+              <th class="pe-4 text-end">Toggle</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td class="ps-4">
+                <div class="fw-bold text-dark">{{ item.name }}</div>
+                <div class="small text-muted text-truncate" style="max-width: 280px;">{{ item.description or '-' }}</div>
+              </td>
+              <td><span class="badge bg-secondary">{{ item.category_rel.name if item.category_rel else '-' }}</span></td>
+              <td class="fw-bold text-dark">₹{{ "%.2f"|format(item.price) }}</td>
+              <td>
+                <span class="badge {% if item.stock_quantity < 10 %}bg-danger{% else %}bg-light text-dark border{% endif %}">
+                  {{ item.stock_quantity }} units
+                </span>
+              </td>
+              <td>{{ item.preparation_time_mins }} mins</td>
+              <td>
+                {% if item.is_available %}
+                  <span class="badge bg-success"><i class="fa-solid fa-check me-1"></i> Available</span>
+                {% else %}
+                  <span class="badge bg-danger"><i class="fa-solid fa-xmark me-1"></i> Sold Out</span>
+                {% endif %}
+              </td>
+              <td class="pe-4 text-end">
+                <form method="POST" action="{{ url_for('canteen_admin.toggle_item', item_id=item.id) }}" class="d-inline">
+                  {% if item.is_available %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Mark Sold Out</button>
+                  {% else %}
+                    <button type="submit" class="btn btn-sm btn-outline-success">Mark Available</button>
+                  {% endif %}
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Add Item Modal -->
+<div class="modal fade" id="addItemModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('canteen_admin.menu_manage') }}">
+        <input type="hidden" name="action" value="add_item">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">Add Menu Dish</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Dish Name</label>
+            <input type="text" name="name" class="form-control" placeholder="e.g. Set Dosa / Paneer Butter Masala" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Category</label>
+            <select name="category_id" class="form-select" required>
+              {% for c in categories %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-bold small">Price (₹)</label>
+              <input type="number" step="0.5" name="price" class="form-control" placeholder="40.00" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-bold small">Initial Stock</label>
+              <input type="number" name="stock_quantity" class="form-control" value="50" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Description</label>
+            <textarea name="description" class="form-control" rows="2" placeholder="Brief ingredients or portion details"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary rounded-pill px-4">Save Dish</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

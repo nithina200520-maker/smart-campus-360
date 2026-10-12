@@ -1,0 +1,21 @@
+# Smart Campus 360 - Python Dependencies
+# Government Engineering College, Mosalehosahalli (Hassan)
+
+Flask>=3.0.0
+Flask-SQLAlchemy>=3.1.0
+SQLAlchemy>=2.0.0
+PyMySQL>=1.1.0
+cryptography>=42.0.0
+python-dotenv>=1.0.0
+qrcode>=8.0
+pillow>=10.0.0
+numpy>=1.26.0
+opencv-python-headless>=4.9.0
+Werkzeug>=3.0.0
+scikit-learn>=1.4.0
+
+# Phase 2: container runtime (used by Docker; not required for local `python run.py`)
+gunicorn>=21.2.0
+
+# Phase 2: automated test suite (development)
+pytest>=8.0.0

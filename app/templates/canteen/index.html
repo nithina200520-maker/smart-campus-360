@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Smart Canteen Menu{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-2">
+
+  <!-- Header -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <div>
+      <span class="badge bg-danger px-3 py-1 rounded-pill mb-1">
+        <i class="fa-solid fa-bowl-food me-1"></i> Module 3: Smart Canteen
+      </span>
+      <h2 class="fw-bold text-dark mb-0">Campus Canteen & Advance Booking</h2>
+      <p class="text-muted small mb-0">Browse fresh meals, schedule advance pickup, and avoid counter queues</p>
+    </div>
+    <div class="d-flex gap-2 mt-2 mt-md-0">
+      <a href="{{ url_for('canteen.cart_view') }}" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm">
+        <i class="fa-solid fa-basket-shopping me-1"></i> View Food Tray ({{ cart_total_count }})
+      </a>
+      <a href="{{ url_for('canteen.my_orders') }}" class="btn btn-outline-secondary rounded-pill">
+        <i class="fa-solid fa-receipt me-1"></i> My Orders
+      </a>
+    </div>
+  </div>
+
+  <!-- Teacher-First Priority Callout Banner -->
+  <div class="alert alert-teacher-priority d-flex align-items-center shadow-sm rounded-4 mb-4" role="alert">
+    <i class="fa-solid fa-crown fa-2x me-3"></i>
+    <div class="small">
+      <strong>Teacher-First Order Priority Active:</strong> 
+      All orders placed by Teachers and Faculty members receive automated first-in-line kitchen priority. 
+      {% if current_user and current_user.role == 'teacher' %}
+        <span class="badge badge-teacher-priority ms-2">YOUR ORDERS WILL BE EXPEDITED</span>
+      {% else %}
+        <span>(Sign in as Teacher to test priority scheduling).</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Categories & Dishes -->
+  {% for cat in categories %}
+  <div class="mb-5">
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <i class="fa-solid fa-utensils text-danger"></i>
+      <h4 class="fw-bold text-dark mb-0">{{ cat.name }}</h4>
+      <span class="badge bg-light text-secondary border">{{ cat.items|length }} Items</span>
+    </div>
+
+    <div class="row g-4">
+      {% for item in cat.items %}
+      <div class="col-md-6 col-lg-4 col-xl-3">
+        <div class="card campus-card h-100 border-0 shadow-sm">
+          
+          <!-- Dish Photo / Image Placeholder -->
+          <div style="height: 160px; background-color: #f8fafc; overflow: hidden; position: relative;">
+            {% if item.photo_url %}
+              <img src="{{ item.photo_url }}" alt="{{ item.name }}" class="food-card-img">
+            {% else %}
+              <div class="w-100 h-100 d-flex align-items-center justify-content-center text-muted bg-light">
+                <i class="fa-solid fa-bowl-rice fa-3x opacity-50"></i>
+              </div>
+            {% endif %}
+
+            <!-- Preparation Time Badge -->
+            <span class="position-absolute bottom-0 start-0 m-2 badge bg-dark bg-opacity-75 rounded-pill small">
+              <i class="fa-solid fa-clock me-1"></i> ~{{ item.preparation_time_mins }} mins
+            </span>
+          </div>
+
+          <div class="card-body p-3 d-flex flex-column">
+            <h5 class="fw-bold text-dark mb-1">{{ item.name }}</h5>
+            <p class="small text-muted flex-grow-1 mb-2">{{ item.description or 'Freshly prepared daily meal.' }}</p>
+
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="price-tag">₹{{ "%.2f"|format(item.price) }}</div>
+              
+              {% if item.is_available and item.stock_quantity > 0 %}
+                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                  {{ item.stock_quantity }} Available
+                </span>
+              {% else %}
+                <span class="badge bg-danger">Sold Out</span>
+              {% endif %}
+            </div>
+
+            {% if item.is_available and item.stock_quantity > 0 %}
+            <form method="POST" action="{{ url_for('canteen.add_to_cart') }}" class="d-flex gap-2">
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <select name="quantity" class="form-select form-select-sm" style="width: 70px;">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+              <button type="submit" class="btn btn-warning btn-sm rounded-pill flex-grow-1 fw-bold">
+                <i class="fa-solid fa-plus me-1"></i> Add to Tray
+              </button>
+            </form>
+            {% else %}
+              <button class="btn btn-secondary btn-sm rounded-pill w-100" disabled>Currently Unavailable</button>
+            {% endif %}
+
+          </div>
+
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+</div>
+{% endblock %}

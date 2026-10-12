@@ -1,0 +1,36 @@
+# ==============================================================================
+# SMART CAMPUS 360 - Git Ignore Rules
+# Protects secrets, local data, and build artifacts from being uploaded
+# ==============================================================================
+
+# --- Secrets & local configuration (NEVER COMMIT .env) ---
+.env
+.env.*
+!.env.example
+
+# --- Local database & backups (runtime data, not source code) ---
+instance/
+backups/
+*.db
+*.sqlite3
+
+# --- Uploaded files at runtime (keep folder structure via .gitkeep if needed) ---
+app/static/uploads/lost_found/*
+app/static/uploads/canteen/*
+app/static/uploads/navigation/*
+app/static/uploads/qr_codes/*
+!app/static/uploads/**/.gitkeep
+
+# --- Python artifacts ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini

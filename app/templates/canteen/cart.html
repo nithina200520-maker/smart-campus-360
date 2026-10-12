@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Food Tray & Checkout{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  
+  <div class="mb-3">
+    <a href="{{ url_for('canteen.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill">
+      <i class="fa-solid fa-arrow-left me-1"></i> Back to Menu
+    </a>
+  </div>
+
+  <div class="row g-4">
+    
+    <!-- Cart Items Table -->
+    <div class="col-lg-7">
+      <div class="card campus-card border-0 shadow-sm p-4 mb-4">
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="fw-bold text-dark mb-0"><i class="fa-solid fa-bowl-food text-warning me-2"></i>Selected Dishes</h4>
+          {% if cart_items %}
+          <form method="POST" action="{{ url_for('canteen.clear_cart') }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill">Clear Tray</button>
+          </form>
+          {% endif %}
+        </div>
+
+        {% if cart_items %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Dish</th>
+                <th>Price</th>
+                <th>Qty</th>
+                <th>Total</th>
+                <th class="text-end">Remove</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ci in cart_items %}
+              <tr>
+                <td>
+                  <div class="fw-bold text-dark">{{ ci.item.name }}</div>
+                  <div class="small text-muted">{{ ci.item.category_rel.name }}</div>
+                </td>
+                <td>₹{{ "%.2f"|format(ci.item.price) }}</td>
+                <td><span class="badge bg-light text-dark border px-2 py-1">{{ ci.quantity }}</span></td>
+                <td class="fw-bold text-success">₹{{ "%.2f"|format(ci.total) }}</td>
+                <td class="text-end">
+                  <form method="POST" action="{{ url_for('canteen.remove_from_cart', item_id=ci.item.id) }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger border-0">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+          <i class="fa-solid fa-bowl-food fa-3x text-muted mb-3 d-block"></i>
+          <h5 class="fw-bold text-dark">Your Food Tray is Empty</h5>
+          <p class="text-muted small mb-3">Choose delicious meals from our canteen menu to schedule an advance pickup.</p>
+          <a href="{{ url_for('canteen.index') }}" class="btn btn-warning rounded-pill px-4">Browse Menu</a>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+    <!-- Advance Pickup & Checkout Details -->
+    {% if cart_items %}
+    <div class="col-lg-5">
+      <div class="card campus-card border-0 shadow-sm p-4">
+        
+        <h4 class="fw-bold text-dark mb-3"><i class="fa-solid fa-receipt text-primary me-2"></i>Order Summary</h4>
+
+        <!-- Priority Notification for Teachers -->
+        {% if user.role == 'teacher' %}
+          {% if user.is_verified %}
+          <div class="alert alert-teacher-priority rounded-3 mb-3 p-3">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <i class="fa-solid fa-crown text-purple"></i>
+              <strong class="text-purple">Teacher-First Priority Queue Active!</strong>
+            </div>
+            <div class="small">
+              Your verified faculty status automatically prioritizes this order at the top of the kitchen preparation queue.
+            </div>
+          </div>
+          {% else %}
+          <div class="alert alert-warning rounded-3 mb-3 p-3">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <i class="fa-solid fa-clock text-warning"></i>
+              <strong>Teacher Priority Pending Verification:</strong>
+            </div>
+            <div class="small">
+              Your Employee ID is pending verification by the Main Admin. Standard queue applies until verified.
+            </div>
+          </div>
+          {% endif %}
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('canteen.checkout') }}">
+          
+          <!-- Scheduled Pickup Time -->
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-secondary">
+              <i class="fa-solid fa-clock text-primary me-1"></i> Scheduled Pickup Time <span class="text-danger">*</span>
+            </label>
+            <input type="datetime-local" name="pickup_time" class="form-control" value="{{ min_pickup }}" min="{{ min_pickup }}" max="{{ max_pickup }}" required>
+            <div class="form-text small">Select advance time to avoid dining hall rush.</div>
+          </div>
+
+          <!-- Payment Simulation Method -->
+          <div class="mb-4">
+            <label class="form-label fw-bold small text-secondary">
+              <i class="fa-solid fa-credit-card text-success me-1"></i> Payment Method
+            </label>
+            <select name="payment_method" class="form-select mb-2">
+              <option value="upi_simulation" selected>Simulated UPI (Google Pay / PhonePe / Paytm)</option>
+              <option value="card">Debit / Credit Card (Simulated)</option>
+              <option value="cash_at_counter">Cash at Canteen Counter on Pickup</option>
+            </select>
+            <div class="small text-muted bg-light p-2 rounded">
+              <i class="fa-solid fa-shield-halved text-success me-1"></i> Safe simulation mode enabled for testing.
+            </div>
+          </div>
+
+          <!-- Price Calculation -->
+          <div class="bg-light p-3 rounded-3 mb-4">
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-muted">Tray Subtotal:</span>
+              <span class="fw-bold">₹{{ "%.2f"|format(subtotal) }}</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-muted">Packaging & Taxes:</span>
+              <span class="text-success fw-bold">FREE (Campus Subsidized)</span>
+            </div>
+            <hr class="my-2">
+            <div class="d-flex justify-content-between fs-5">
+              <span class="fw-bold text-dark">Total Payable:</span>
+              <span class="fw-bold text-success">₹{{ "%.2f"|format(subtotal) }}</span>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-success btn-lg rounded-pill w-100 fw-bold shadow">
+            <i class="fa-solid fa-qrcode me-2"></i> Confirm & Generate Pickup QR
+          </button>
+        </form>
+
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>
+{% endblock %}
