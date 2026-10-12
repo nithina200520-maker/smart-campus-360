@@ -75,7 +75,8 @@ html[data-theme="dark"] {
   position: absolute; top: -6vh;
   width: var(--sz, 6px); height: var(--sz, 6px); border-radius: 50%;
   background: radial-gradient(circle at 50% 50%, #ffffff 0%, #cfe8ff 45%, rgba(160,210,255,0) 72%);
-  box-shadow: 0 0 6px rgba(150,205,255,0.9), 0 0 14px rgba(90,160,255,0.55);
+  box-shadow: 0 0 8px rgba(170,215,255,1), 0 0 18px rgba(90,160,255,0.85), 0 0 30px rgba(60,130,255,0.5);
+  filter: drop-shadow(0 0 4px rgba(150,205,255,0.9));
   opacity: 0;
   animation: sc-fall var(--dur, 12s) linear var(--delay, 0s) infinite,
              sc-twinkle var(--tw, 3s) ease-in-out var(--delay, 0s) infinite;
@@ -85,6 +86,31 @@ html[data-theme="dark"] .sc-flake { background: radial-gradient(circle at 50% 50
 .sc-flake.star { background: none; border-radius: 0; box-shadow: none; color: #eaf4ff; font-size: var(--sz, 10px); line-height: 1; text-shadow: 0 0 8px rgba(120,190,255,0.95), 0 0 16px rgba(80,150,255,0.7); }
 @keyframes sc-fall { 0% { transform: translate3d(0, -6vh, 0); } 100% { transform: translate3d(var(--drift, 0px), 110vh, 0); } }
 @keyframes sc-twinkle { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.95; } }
+
+/* ============================== ENHANCED ANIMATIONS ============================== */
+.sc-banner { isolation: isolate; }
+.sc-banner-media { animation: sc-kenburns 26s ease-in-out infinite alternate; }
+@keyframes sc-kenburns { 0% { transform: scale(1.02) translate(0,0); } 100% { transform: scale(1.16) translate(-2%, -2%); } }
+.sc-banner::after { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,0.16) 50%, transparent 58%); transform: translateX(-130%); animation: sc-sheen 7s ease-in-out 1.2s infinite; }
+@keyframes sc-sheen { 0% { transform: translateX(-130%); } 55%, 100% { transform: translateX(130%); } }
+
+.sc-fcard { transform-style: preserve-3d; will-change: transform; }
+.sc-fcard-media { position: relative; overflow: hidden; }
+.sc-fcard-media img { transition: transform .5s ease; }
+.sc-fcard:hover .sc-fcard-media img { transform: scale(1.08); }
+.sc-fcard-media::after { content: ""; position: absolute; inset: 0; background: linear-gradient(120deg, transparent 32%, rgba(255,255,255,0.5) 50%, transparent 68%); transform: translateX(-130%); pointer-events: none; }
+.sc-fcard:hover .sc-fcard-media::after { animation: sc-sheen 1s ease; }
+
+.sc-fcard-badge { animation: sc-floaty 3.6s ease-in-out infinite; }
+@keyframes sc-floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+.sc-sic { transition: transform .3s cubic-bezier(.2,.8,.2,1); }
+.sc-stat { transition: transform .25s ease, box-shadow .25s ease; }
+.sc-stat:hover { transform: translateY(-4px); }
+.sc-stat:hover .sc-sic { transform: scale(1.15) rotate(-8deg); }
+
+.sc-dot { animation: sc-ping 1.9s ease-out infinite; }
+@keyframes sc-ping { 0% { box-shadow: 0 0 0 0 rgba(244,63,94,0.55); } 70% { box-shadow: 0 0 0 9px rgba(244,63,94,0); } 100% { box-shadow: 0 0 0 0 rgba(244,63,94,0); } }
 
 /* ============================== SIDEBAR ============================== */
 .sc-sidebar {
@@ -348,5 +374,7 @@ html[data-theme="dark"] .sc-banner-veil { background: linear-gradient(100deg, rg
   .sc-fcard, .sc-btn, .sc-icon-btn, .sc-user, .sc-nav, .sc-row { transition: none; }
   .reveal { opacity: 1; transform: none; }
   .sc-qfind .sc-qpin { animation: none; }
+  .sc-banner-media, .sc-banner::after, .sc-fcard-media::after, .sc-fcard-badge, .sc-dot { animation: none !important; }
+  .sc-fcard { transform: none !important; }
   .sc-snow { display: none; }
 }

@@ -145,7 +145,7 @@
     var layer = document.getElementById('scSnow');
     if (!layer) return;
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    var count = 46;
+    var count = 72;
     var frag = document.createDocumentFragment();
     for (var i = 0; i < count; i++) {
       var f = document.createElement('span');
@@ -164,6 +164,42 @@
     layer.appendChild(frag);
   }
 
+  /* ---------- Count-up for stat numbers ---------- */
+  function initCountUp() {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var nums = document.querySelectorAll('.sc-snum');
+    nums.forEach(function (el) {
+      var raw = (el.textContent || '').trim();
+      var target = parseInt(raw.replace(/[^0-9]/g, ''), 10);
+      if (isNaN(target) || target === 0) return;
+      var dur = 1100, start = null;
+      function step(ts) {
+        if (!start) start = ts;
+        var p = Math.min((ts - start) / dur, 1);
+        var eased = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.floor(eased * target).toLocaleString();
+        if (p < 1) requestAnimationFrame(step); else el.textContent = target.toLocaleString();
+      }
+      el.textContent = '0';
+      requestAnimationFrame(step);
+    });
+  }
+
+  /* ---------- 3D tilt on feature cards ---------- */
+  function initTilt() {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia && window.matchMedia('(hover: none)').matches) return;
+    document.querySelectorAll('.sc-fcard').forEach(function (card) {
+      card.addEventListener('mousemove', function (e) {
+        var r = card.getBoundingClientRect();
+        var px = (e.clientX - r.left) / r.width - 0.5;
+        var py = (e.clientY - r.top) / r.height - 0.5;
+        card.style.transform = 'perspective(900px) rotateX(' + (-py * 7).toFixed(2) + 'deg) rotateY(' + (px * 9).toFixed(2) + 'deg) translateY(-4px)';
+      });
+      card.addEventListener('mouseleave', function () { card.style.transform = ''; });
+    });
+  }
+
   function init() {
     initThemeToggle();
     initSidebar();
@@ -174,6 +210,8 @@
     initReveal();
     initClock();
     initSnow();
+    initCountUp();
+    initTilt();
   }
 
   if (document.readyState !== 'loading') init();

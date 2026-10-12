@@ -190,7 +190,7 @@
 
     <!-- ============================= WELCOME BANNER ============================= -->
     <section class="sc-banner reveal">
-      <img class="sc-banner-media" src="{{ url_for('static', filename='images/placeholder_admin.jpg') }}" alt="GEC Mosalehosahalli campus">
+      <img class="sc-banner-media" src="{{ url_for('static', filename='images/dashboard/campus_map.png') }}" alt="GEC Mosalehosahalli isometric campus map">
       <div class="sc-banner-veil"></div>
 
       <div class="sc-float date">
@@ -221,7 +221,7 @@
         <div class="sc-grid sc-cols-3">
           <div class="sc-fcard reveal">
             <div class="sc-fcard-media grad-nav">
-              <img src="{{ url_for('static', filename='images/placeholder_node.jpg') }}" alt="Campus map">
+              <img src="{{ url_for('static', filename='images/dashboard/island_map.png') }}" alt="Campus map">
               <span class="sc-fcard-badge b-blue"><i class="fa-solid fa-location-arrow"></i></span>
             </div>
             <div class="sc-fcard-body">
@@ -233,7 +233,7 @@
 
           <div class="sc-fcard reveal">
             <div class="sc-fcard-media grad-lf">
-              <div class="sc-lf-cluster"><span class="w"><i class="fa-solid fa-wallet"></i></span><span class="p"><i class="fa-solid fa-mobile-screen"></i></span><span class="k"><i class="fa-solid fa-key"></i></span></div>
+              <img src="{{ url_for('static', filename='images/dashboard/lf_wallet.png') }}" alt="Lost and found items">
               <span class="sc-fcard-badge b-purple"><i class="fa-solid fa-magnifying-glass"></i></span>
             </div>
             <div class="sc-fcard-body">
@@ -245,7 +245,7 @@
 
           <div class="sc-fcard reveal">
             <div class="sc-fcard-media grad-can">
-              <img src="{{ url_for('static', filename='images/food_meals.jpg') }}" alt="Canteen meals">
+              <img src="{{ url_for('static', filename='images/dashboard/food_biryani.png') }}" alt="Canteen meals">
               <span class="sc-fcard-badge b-green"><i class="fa-solid fa-utensils"></i></span>
             </div>
             <div class="sc-fcard-body">
@@ -292,7 +292,7 @@
               {% for item in recent_lost_found[:4] %}
               <li>
                 <a class="sc-row" href="{{ url_for('lost_found.item_detail', item_id=item.id) }}">
-                  {% if item.photo_url %}<img class="sc-thumb" src="{{ item.photo_url }}" alt="{{ item.title }}">{% else %}<span class="sc-thumb"><i class="fa-solid fa-image"></i></span>{% endif %}
+                  {% if item.photo_url %}<img class="sc-thumb" src="{{ item.photo_url }}" alt="{{ item.title }}">{% else %}<img class="sc-thumb" src="{{ url_for('static', filename='images/dashboard/' ~ ['wallet_black.png','phone_card.png','id_card.png','tracking.png'][loop.index0 % 4]) }}" alt="{{ item.title }}">{% endif %}
                   <span class="sc-rt">
                     <strong>{{ item.title }}</strong>
                     <small>{{ 'Found at' if item.report_type == 'found' else 'Lost near' }} {{ item.location_reported }}</small>
@@ -317,7 +317,7 @@
               {% set food = entry.item %}
               <li>
                 <a class="sc-row" href="{{ url_for('canteen.index') }}">
-                  {% if food.photo_url %}<img class="sc-thumb" src="{{ food.photo_url }}" alt="{{ food.name }}">{% else %}<span class="sc-thumb"><i class="fa-solid fa-bowl-food"></i></span>{% endif %}
+                  {% if food.photo_url %}<img class="sc-thumb" src="{{ food.photo_url }}" alt="{{ food.name }}">{% else %}<img class="sc-thumb" src="{{ url_for('static', filename='images/dashboard/' ~ ['food_biryani.png','food_dosa.png','food_idli.png','food_chinese.png'][loop.index0 % 4]) }}" alt="{{ food.name }}">{% endif %}
                   <span class="sc-rt">
                     <strong>{{ food.name }}</strong>
                     <small>₹{{ '%.0f'|format(food.price) }} &middot; {{ food.preparation_time_mins }} min</small>
@@ -368,7 +368,7 @@
             {% endfor %}
           </select>
           <div class="sc-qmap">
-            <img src="{{ url_for('static', filename='images/placeholder_node.jpg') }}" alt="Campus map preview">
+            <img src="{{ url_for('static', filename='images/dashboard/campus_map.png') }}" alt="Campus map preview">
             <i class="fa-solid fa-location-dot sc-qpin"></i>
           </div>
           <a class="sc-btn sky block" id="qfindGo" href="{{ url_for('navigation.index') }}">Get Directions <i class="fa-solid fa-arrow-right"></i></a>
