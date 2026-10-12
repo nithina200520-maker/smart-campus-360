@@ -87,33 +87,30 @@ html[data-theme="dark"] .sc-flake { background: radial-gradient(circle at 50% 50
 @keyframes sc-fall { 0% { transform: translate3d(0, -6vh, 0); } 100% { transform: translate3d(var(--drift, 0px), 110vh, 0); } }
 @keyframes sc-twinkle { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.95; } }
 
-/* ============================== CIRCULAR LIGHT RAYS (behind the glass) ============================== */
-.sc-rays2 { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.sc-burst {
-  position: absolute; top: 50%; left: 50%; width: 170vmax; height: 170vmax;
-  transform: translate(-50%, -50%);
-  background: repeating-conic-gradient(from 0deg, rgba(150,200,255,0) 0deg 9deg, rgba(150,200,255,0.26) 9deg 10deg);
-  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 0, #000 20%, #000 42%, transparent 66%);
-  mask: radial-gradient(circle at 50% 50%, transparent 0, #000 20%, #000 42%, transparent 66%);
-  animation: sc-spin 20s linear infinite, sc-hue 8s linear infinite;
+/* ============================== PURPLE GALAXY (behind the glass) ============================== */
+.sc-galaxy { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.sc-galaxy::before, .sc-galaxy::after { content: ""; position: absolute; top: 50%; left: 50%; width: 160vmax; height: 160vmax; border-radius: 50%; }
+.sc-galaxy::before {
+  background: conic-gradient(from 0deg,
+    rgba(168,85,247,0) 0deg, rgba(216,180,254,0.45) 60deg, rgba(236,72,153,0.30) 130deg,
+    rgba(129,140,248,0.38) 210deg, rgba(192,132,252,0.28) 290deg, rgba(168,85,247,0) 360deg);
+  filter: blur(48px) saturate(1.25);
+  -webkit-mask: radial-gradient(circle at 50% 50%, #000 0, #000 34%, transparent 62%);
+  mask: radial-gradient(circle at 50% 50%, #000 0, #000 34%, transparent 62%);
+  animation: sc-galaxy-spin 46s linear infinite;
+  opacity: 0.9;
 }
-.sc-burst.in {
-  background: repeating-conic-gradient(from 0deg, rgba(180,150,255,0) 0deg 11deg, rgba(180,150,255,0.20) 11deg 12deg);
-  animation: sc-spin-rev 26s linear infinite, sc-hue 8s linear infinite;
+.sc-galaxy::after {
+  background:
+    radial-gradient(40vmax 40vmax at 42% 42%, rgba(240,171,252,0.42), transparent 60%),
+    radial-gradient(34vmax 34vmax at 60% 55%, rgba(167,139,250,0.38), transparent 60%),
+    radial-gradient(26vmax 26vmax at 50% 50%, rgba(255,255,255,0.6), rgba(233,213,255,0.28) 42%, transparent 70%);
+  filter: blur(30px);
+  animation: sc-galaxy-spin-rev 64s linear infinite;
+  opacity: 0.85;
 }
-.sc-ring {
-  position: absolute; top: 50%; left: 50%; width: 46vmin; height: 46vmin; border-radius: 50%;
-  border: 2px solid rgba(150,200,255,0.5); transform: translate(-50%, -50%) scale(0.2); opacity: 0;
-  box-shadow: 0 0 18px rgba(150,200,255,0.4), inset 0 0 18px rgba(150,200,255,0.3);
-  animation: sc-ripple-out 7s ease-out infinite;
-}
-.sc-ring:nth-child(4) { animation-delay: 2.3s; }
-.sc-ring.in:nth-child(5) { animation-name: sc-ripple-in; animation-delay: 4.6s; border-color: rgba(180,150,255,0.5); }
-@keyframes sc-spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
-@keyframes sc-spin-rev { 0% { transform: translate(-50%, -50%) rotate(360deg); } 100% { transform: translate(-50%, -50%) rotate(0deg); } }
-@keyframes sc-hue { 0% { filter: hue-rotate(0deg) saturate(1.15); } 100% { filter: hue-rotate(360deg) saturate(1.15); } }
-@keyframes sc-ripple-out { 0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; } 12% { opacity: 0.7; } 100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; } }
-@keyframes sc-ripple-in { 0% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; } 12% { opacity: 0.6; } 100% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; } }
+@keyframes sc-galaxy-spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes sc-galaxy-spin-rev { 0% { transform: translate(-50%, -50%) rotate(360deg); } 100% { transform: translate(-50%, -50%) rotate(0deg); } }
 
 /* ============================== ENHANCED ANIMATIONS ============================== */
 .sc-banner { isolation: isolate; }
@@ -404,5 +401,5 @@ html[data-theme="dark"] .sc-banner-veil { background: linear-gradient(100deg, rg
   .sc-qfind .sc-qpin { animation: none; }
   .sc-banner-media, .sc-banner::after, .sc-fcard-media::after, .sc-fcard-badge, .sc-dot { animation: none !important; }
   .sc-fcard { transform: none !important; }
-  .sc-snow, .sc-rays2 { display: none; }
+  .sc-snow, .sc-galaxy { display: none; }
 }
