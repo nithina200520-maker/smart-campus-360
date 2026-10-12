@@ -256,3 +256,33 @@ docker compose up -d --build web  # production image on http://127.0.0.1:8080
 1. Open **/navigation** - search "HOD", pick route *Main Gate → Sample Classroom A-102*, choose A* or Dijkstra, then click **Start Street-View Walkthrough** and follow the photos with the directional arrows (double-click to zoom, `⛶` for full screen).
 2. Choose *Academic Block A / Ground Floor* filters and open the sample **floor plan** from the *Digital Map & Floor Plans* card.
 3. Log in as Main Admin → Dashboard → **Manage Map & Photos** - create a node with a photo upload, connect a path, upload a floor plan, download a CSV template, re-import it, and confirm every action appears in Audit Logs.
+
+## 🧠 Completed Phase 4 Milestones - AI Lost & Found
+
+> All Phase 4 item data is **temporary sample data** until real demonstration reports are supplied. Similarity scores are decision support only and are **never** treated as proof of ownership - every handover is verified by the Main Admin.
+
+1. **Lost & Found Reporting** - users file lost or found reports with a photograph, description, category, dominant colour, date and campus location. Reports and photos are stored on the server with content-validated uploads.
+2. **Secure Storage & Validation** - uploads are restricted to true PNG/JPG/JPEG/WEBP bytes (magic-byte check), capped at 8 MB, filename-sanitised, and never trusted by extension alone.
+3. **Pretrained Image Embeddings** - `app/utils/image_matcher.py` generates embeddings with a pretrained MobileNetV2 (ImageNet) network run locally through OpenCV DNN (`python download_embedding_model.py` fetches the weights once); it degrades gracefully to an offline HSV colour-spatial histogram embedding when the model is absent. Embeddings are stored as `{model, vector}` so mixed-model comparisons are never performed.
+4. **Multi-Factor Ranking** - potential matches are ranked by blending image similarity with **category, colour, date proximity and location** (image 65% / context 35%; context-only matches are down-weighted). The per-factor breakdown is shown on each match.
+5. **Authorised Match Visibility** - the ranked match list is visible only to the report owner and the Main Admin; other users see a private notice and must file a claim.
+6. **In-App Notifications** - targeted notifications (never broadcast) are raised for possible matches, claims, verifications, location updates, approvals/rejections and returns. A navbar bell shows a live unread count, and `/notifications/` provides full history with mark-read / mark-all-read.
+7. **Claim → Verify → Return Workflow** - a claim requires a private proof statement (minimum length enforced; own/closed/duplicate claims blocked) and moves the report to *claimed*. The Main Admin approves or rejects (dispute resolution), records the physical collection/return (`collected_at`, status *closed*), and every party is notified.
+8. **Main Admin Lost & Found Center** (`/admin/lost-found`, linked from the dashboard) - review all reports, filter by status, verify found items, update reported locations, resolve the pending-claim queue, record returns, view notification history and send single targeted notifications.
+9. **Contact & Privacy Protection** - reporter contact details are masked for everyone except the owner and the Main Admin; visitors cannot report or claim; private proof statements are visible only to administration.
+10. **Migration** - `python migrate_phase4.py` (automatic DB backup first; adds `color_hint`/`resolution_note` and `composite_score`/`factors`; creates `lost_found_claims` + `notifications`; seeds one demo claim - idempotent, existing data preserved).
+11. **Tests** - Phase 4 adds a 29-test suite (`tests/test_lost_found_phase4.py`) covering ranking, image validation, notifications, the full claim/verify/return flow and admin controls - **102 tests total**.
+
+### Testing Phase 4 in VS Code (Windows 11)
+
+```powershell
+python download_embedding_model.py  # optional: one-time pretrained model (auto-falls back if skipped)
+python migrate_phase4.py            # one-time schema + sample upgrade (backs up DB first)
+python run.py                       # dev server on http://127.0.0.1:5000
+python -m pytest -q                 # full 102-test suite on an isolated temp database
+docker compose up -d --build web    # production image on http://127.0.0.1:8080
+```
+
+1. Sign in as **student@gechassan.ac.in** (`Student@123`, see `init_db.py`) → **Lost & Found → Report** a lost calculator at *Central Library* - the AI engine finds the sample *Found Casio Calculator* and notifies both parties (check the navbar bell).
+2. Open the matched report → **Claim This Item** with a proof statement → sign in as **Main Admin** (`admin@gechassan.ac.in` / `Admin@123`) → **Manage Claims & Returns** → approve the claim, then **Record Return** to close it; watch the status timeline and notifications update.
+3. Open **/lost-found/my-reports** to see your reports and claims, and **/notifications/** for your full alert history and unread count.

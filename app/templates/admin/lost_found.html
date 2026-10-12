@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Lost &amp; Found Administration{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-4">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <div>
+      <span class="badge bg-danger px-3 py-1 rounded-pill mb-1">
+        <i class="fa-solid fa-user-shield me-1"></i> Main Admin &bull; Phase 4 Lost &amp; Found Command Center
+      </span>
+      <h2 class="fw-bold text-dark mb-0">AI Lost &amp; Found Administration</h2>
+      <p class="text-muted small mb-0">Government Engineering College, Mosalehosahalli (Hassan) &mdash; review reports, verify found items, resolve ownership claims, update locations, record returns and manage notifications.</p>
+    </div>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-outline-secondary rounded-pill mt-2 mt-md-0">
+      <i class="fa-solid fa-arrow-left me-1"></i> Admin Dashboard
+    </a>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="card campus-card border-0 shadow-sm p-3 text-center">
+        <div class="h3 fw-bold text-secondary mb-0">{{ stats.open }}</div>
+        <div class="small text-muted text-uppercase fw-bold">Open Reports</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card campus-card border-0 shadow-sm p-3 text-center">
+        <div class="h3 fw-bold text-warning mb-0">{{ stats.claimed }}</div>
+        <div class="small text-muted text-uppercase fw-bold">Awaiting / Claimed</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card campus-card border-0 shadow-sm p-3 text-center">
+        <div class="h3 fw-bold text-primary mb-0">{{ stats.returned }}</div>
+        <div class="small text-muted text-uppercase fw-bold">Returned &amp; Closed</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card campus-card border-0 shadow-sm p-3 text-center">
+        <div class="h3 fw-bold text-danger mb-0">{{ stats.pending_claims }}</div>
+        <div class="small text-muted text-uppercase fw-bold">Claims To Verify</div>
+      </div>
+    </div>
+  </div>
+
+  <ul class="nav nav-pills mb-4 gap-2">
+    <li class="nav-item"><a class="nav-link rounded-pill {% if not current_status %}active fw-bold{% endif %}" href="{{ url_for('admin.manage_lost_found') }}">All Reports</a></li>
+    {% for s in ['open', 'matched', 'claimed', 'closed'] %}
+    <li class="nav-item"><a class="nav-link rounded-pill text-capitalize {% if current_status == s %}active fw-bold{% endif %}" href="{{ url_for('admin.manage_lost_found', status=s) }}">{{ s }}</a></li>
+    {% endfor %}
+  </ul>
+
+  <!-- Pending claims queue -->
+  <div class="card campus-card border-0 shadow-sm mb-4">
+    <div class="card-header bg-warning bg-opacity-25 fw-bold"><i class="fa-solid fa-scale-balanced me-2 text-dark"></i>Ownership Claims Awaiting Your Verification ({{ pending_claims|length }})</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">Claimant</th>
+              <th>Item Claimed</th>
+              <th>Private Proof Statement</th>
+              <th class="pe-4 text-end">Decision</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in pending_claims %}
+            <tr>
+              <td class="ps-4">
+                <div class="fw-bold small">{{ c.claimant.full_name if c.claimant else 'Unknown' }}</div>
+                <div class="text-muted" style="font-size:0.72rem;">{{ c.claimant.email if c.claimant else '' }}</div>
+                <div class="text-muted" style="font-size:0.72rem;">{{ c.created_at.strftime('%d %b %Y, %H:%M') if c.created_at else '' }}</div>
+              </td>
+              <td>
+                <a href="{{ url_for('lost_found.item_detail', item_id=c.item_id) }}" class="fw-bold text-dark text-decoration-none">{{ c.item.title if c.item else 'Item #'+ (c.item_id|string) }}</a>
+                <div class="text-muted" style="font-size:0.72rem;">{{ c.item.report_type.upper() if c.item else '' }} &bull; reporter: {{ c.item.reporter.full_name if (c.item and c.item.reporter) else '-' }}</div>
+              </td>
+              <td class="small text-secondary" style="max-width:340px;">{{ c.proof_statement }}</td>
+              <td class="pe-4 text-end" style="min-width: 300px;">
+                <form method="POST" action="{{ url_for('admin.lf_claim_decision', claim_id=c.id) }}" class="d-flex gap-1 justify-content-end flex-nowrap">
+                  <input type="text" name="decision_note" class="form-control form-control-sm" placeholder="Optional note..." style="max-width: 130px;">
+                  <button type="submit" name="decision" value="approve" class="btn btn-sm btn-success rounded-pill fw-bold text-nowrap"><i class="fa-solid fa-check me-1"></i>Approve</button>
+                  <button type="submit" name="decision" value="reject" class="btn btn-sm btn-danger rounded-pill fw-bold text-nowrap"><i class="fa-solid fa-xmark me-1"></i>Reject</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-center py-4 text-muted small">No pending ownership claims. Every reported item is unclaimed right now.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reports table -->
+  <div class="card campus-card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white fw-bold"><i class="fa-solid fa-magnifying-glass-location me-2 text-success"></i>All Reports ({{ items|length }})</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">Item / Type</th>
+              <th>Status</th>
+              <th>Reported Location</th>
+              <th>Owner</th>
+              <th class="pe-4 text-end">Admin Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td class="ps-4">
+                <div class="d-flex align-items-center gap-2">
+                  {% if item.photo_url %}<img src="{{ item.photo_url }}" alt="" style="width:38px;height:38px;object-fit:cover;border-radius:6px;">{% endif %}
+                  <div>
+                    <a href="{{ url_for('lost_found.item_detail', item_id=item.id) }}" class="fw-bold text-dark text-decoration-none small">{{ item.title }}</a>
+                    <div><span class="badge {% if item.report_type == 'lost' %}bg-danger{% else %}bg-success{% endif %} text-uppercase" style="font-size:0.62rem;">{{ item.report_type }}</span> <span class="text-muted" style="font-size:0.7rem;">{{ item.category }}</span></div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="badge {% if item.status == 'closed' %}bg-primary{% elif item.status == 'claimed' %}bg-warning text-dark{% elif item.status == 'matched' %}bg-info text-dark{% else %}bg-secondary{% endif %} text-uppercase" style="font-size:0.68rem;">{{ item.status }}</span>
+                {% if item.verified_by_admin_id %}<div class="text-success" style="font-size:0.68rem;"><i class="fa-solid fa-circle-check me-1"></i>verified</div>{% endif %}
+                {% if item.collected_at %}<div class="text-primary" style="font-size:0.68rem;">returned {{ item.collected_at.strftime('%d %b') }}</div>{% endif %}
+              </td>
+              <td class="small">
+                <form method="POST" action="{{ url_for('admin.lf_update_location', item_id=item.id) }}" class="d-flex gap-1">
+                  <input type="text" name="location_reported" value="{{ item.location_reported }}" class="form-control form-control-sm" style="max-width:150px;">
+                  <button class="btn btn-sm btn-outline-primary rounded-pill" title="Update location &amp; notify reporter"><i class="fa-solid fa-location-crosshairs"></i></button>
+                </form>
+              </td>
+              <td class="small">
+                <div class="fw-bold">{{ item.reporter.full_name if item.reporter else 'Unknown' }}</div>
+                <div class="text-muted" style="font-size:0.7rem;">{{ item.contact_phone or 'no phone' }}</div>
+              </td>
+              <td class="pe-4 text-end">
+                <div class="d-flex gap-1 justify-content-end flex-wrap">
+                  <form method="POST" action="{{ url_for('admin.lf_verify_item', item_id=item.id) }}">
+                    <button class="btn btn-sm btn-outline-success rounded-pill text-nowrap" title="Mark found item as verified"><i class="fa-solid fa-user-check me-1"></i>Verify</button>
+                  </form>
+                  {% if item.status != 'closed' %}
+                  <form method="POST" action="{{ url_for('admin.lf_record_return', item_id=item.id) }}" class="d-flex gap-1">
+                    <input type="text" name="handover_note" class="form-control form-control-sm" placeholder="Handover note" style="max-width:110px;">
+                    <button class="btn btn-sm btn-primary rounded-pill text-nowrap" title="Record that item was collected and returned" {% if not item.claimed_by_user_id %}onclick="return confirm('No approved claimant is assigned yet. Record return anyway?');"{% endif %}><i class="fa-solid fa-box-archive me-1"></i>Return</button>
+                  </form>
+                  {% endif %}
+                  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap" data-bs-toggle="modal" data-bs-target="#notifyModal" data-user="{{ item.user_id }}" data-name="{{ item.reporter.full_name if item.reporter else 'reporter' }}" title="Send targeted notification"><i class="fa-regular fa-paper-plane"></i></button>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center py-4 text-muted small">No reports found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification history -->
+  <div class="card campus-card border-0 shadow-sm">
+    <div class="card-header bg-white fw-bold"><i class="fa-regular fa-bell me-2 text-primary"></i>Recent In-App Notifications ({{ notifications|length }})</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">To</th>
+              <th>Category</th>
+              <th>Title</th>
+              <th>Sent</th>
+              <th class="pe-4 text-end">Read</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for n in notifications %}
+            <tr>
+              <td class="ps-4 small">{{ n.user.full_name if n.user else 'System' }}</td>
+              <td><span class="badge {% if n.category == 'match' %}bg-success{% elif n.category == 'claim' %}bg-warning text-dark{% elif n.category == 'return' %}bg-primary{% elif n.category == 'admin' %}bg-danger{% else %}bg-secondary{% endif %}" style="font-size:0.65rem;">{{ n.category }}</span></td>
+              <td class="small text-dark">{{ n.title }}</td>
+              <td class="small text-muted text-nowrap">{{ n.created_at.strftime('%d %b %Y %H:%M') if n.created_at else '' }}</td>
+              <td class="pe-4 text-end">{% if n.is_read %}<i class="fa-solid fa-check text-success"></i>{% else %}<i class="fa-regular fa-circle text-muted"></i>{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center py-4 text-muted small">No notifications have been generated yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Targeted notification modal -->
+<div class="modal fade" id="notifyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="POST" id="notifyForm" action="" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-regular fa-paper-plane me-2"></i>Send Targeted Notification</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-3">Recipient: <span id="notifyName" class="fw-bold text-dark"></span>. Notifications are individual &mdash; never broadcast to all users.</p>
+        <div class="mb-2">
+          <label class="form-label small fw-bold">Title</label>
+          <input type="text" name="title" class="form-control" required maxlength="150">
+        </div>
+        <div class="mb-0">
+          <label class="form-label small fw-bold">Message</label>
+          <textarea name="message" class="form-control" rows="3" required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary rounded-pill fw-bold">Send Notification</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modal = document.getElementById('notifyModal');
+    if (modal) {
+      modal.addEventListener('show.bs.modal', function (event) {
+        var btn = event.relatedTarget;
+        var userId = btn.getAttribute('data-user');
+        var name = btn.getAttribute('data-name');
+        document.getElementById('notifyForm').action = '/admin/lost-found/notify/' + userId;
+        document.getElementById('notifyName').textContent = name;
+      });
+    }
+  })();
+</script>
+{% endblock %}

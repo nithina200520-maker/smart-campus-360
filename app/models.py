@@ -176,8 +176,10 @@ class LostFoundItem(db.Model):
     description = db.Column(db.Text, nullable=False)
     photo_url = db.Column(db.String(255), nullable=True)
     image_feature_vector = db.Column(db.Text, nullable=True) # JSON serialized embedding
+    color_hint = db.Column(db.String(30), nullable=True) # Phase 4: dominant item colour for contextual ranking
     status = db.Column(db.String(20), nullable=False, default='open') # 'open', 'matched', 'claimed', 'closed'
     contact_phone = db.Column(db.String(20), nullable=True)
+    resolution_note = db.Column(db.Text, nullable=True) # Phase 4: admin dispute / handover remarks
     claimed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     verified_by_admin_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     collected_at = db.Column(db.DateTime, nullable=True)
@@ -209,12 +211,69 @@ class LostFoundMatch(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     lost_item_id = db.Column(db.Integer, db.ForeignKey('lost_found_items.id', ondelete='CASCADE'), nullable=False)
     found_item_id = db.Column(db.Integer, db.ForeignKey('lost_found_items.id', ondelete='CASCADE'), nullable=False)
-    similarity_score = db.Column(db.Float, nullable=False) # e.g. 0.87
+    similarity_score = db.Column(db.Float, nullable=False) # e.g. 0.87 (image embedding cosine)
+    composite_score = db.Column(db.Float, nullable=True) # Phase 4: image + category/colour/date/location blend
+    factors = db.Column(db.Text, nullable=True) # Phase 4: JSON breakdown of contextual signals
     status = db.Column(db.String(20), default='suggested') # 'suggested', 'verified', 'rejected'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     lost_item = db.relationship('LostFoundItem', foreign_keys=[lost_item_id])
     found_item = db.relationship('LostFoundItem', foreign_keys=[found_item_id])
+
+
+class LostFoundClaim(db.Model):
+    """Phase 4: formal ownership claim against a report, requiring authorized verification."""
+    __tablename__ = 'lost_found_claims'
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey('lost_found_items.id', ondelete='CASCADE'), nullable=False)
+    claimant_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    proof_statement = db.Column(db.Text, nullable=False) # claimant's ownership description (never shown publicly)
+    status = db.Column(db.String(20), default='pending') # 'pending', 'approved', 'rejected'
+    decided_by_admin_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    decision_note = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    decided_at = db.Column(db.DateTime, nullable=True)
+
+    item = db.relationship('LostFoundItem', backref='claims')
+    claimant = db.relationship('User', foreign_keys=[claimant_id])
+    deciding_admin = db.relationship('User', foreign_keys=[decided_by_admin_id])
+
+
+class Notification(db.Model):
+    """Phase 4: in-app user notifications. Targeted only - never broadcast to all users."""
+    __tablename__ = 'notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    title = db.Column(db.String(150), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(20), default='system') # 'match', 'claim', 'return', 'admin', 'system'
+    link_url = db.Column(db.String(255), nullable=True)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', foreign_keys=[user_id], backref='notifications')
+
+    @classmethod
+    def notify(cls, user_id, title, message, category='system', link_url=None):
+        """Create one targeted in-app notification (no commit - caller controls the transaction)."""
+        if not user_id:
+            return None
+        note = cls(user_id=user_id, title=title, message=message, category=category, link_url=link_url)
+        db.session.add(note)
+        return note
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "message": self.message,
+            "category": self.category,
+            "link_url": self.link_url,
+            "is_read": self.is_read,
+            "created_at": self.created_at.strftime('%d %b %Y, %H:%M') if self.created_at else None
+        }
 
 
 class CanteenCategory(db.Model):

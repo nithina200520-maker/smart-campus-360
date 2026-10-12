@@ -23,9 +23,11 @@
               {{ item.report_type }}
             </span>
             <span class="badge bg-secondary mb-2">{{ item.category }}</span>
+            {% if item.color_hint %}<span class="badge bg-light text-dark border mb-2">{{ item.color_hint }}</span>{% endif %}
+            {% if item.verified_by_admin_id %}<span class="badge bg-info text-dark mb-2"><i class="fa-solid fa-badge-check me-1"></i>Admin Verified</span>{% endif %}
             <h3 class="fw-bold text-dark mb-1">{{ item.title }}</h3>
           </div>
-          <span class="badge bg-dark px-3 py-2 text-uppercase">{{ item.status }}</span>
+          <span class="badge {% if item.status == 'closed' %}bg-success{% elif item.status == 'claimed' %}bg-warning text-dark{% else %}bg-dark{% endif %} px-3 py-2 text-uppercase">{{ item.status }}</span>
         </div>
 
         {% if item.photo_url %}
@@ -49,83 +51,159 @@
           <div class="col-sm-6">
             <span class="text-muted small fw-bold d-block">Reported By</span>
             {% if mask_contact %}
-              <span class="fw-bold text-muted"><i class="fa-solid fa-lock me-1 small"></i> Restricted (Visitor Access)</span>
+              <span class="fw-bold text-muted"><i class="fa-solid fa-lock me-1 small"></i> Private (coordinate via a claim)</span>
             {% else %}
-              <span class="fw-bold text-dark">{{ item.reporter.full_name }} ({{ item.reporter.role.title() }})</span>
+              <span class="fw-bold text-dark">{{ item.reporter.full_name }} ({{ item.reporter.role.replace('_', ' ').title() }})</span>
             {% endif %}
           </div>
           <div class="col-sm-6">
             <span class="text-muted small fw-bold d-block">Contact</span>
             {% if mask_contact %}
-              <span class="fw-bold text-muted">Contact details hidden from visitor accounts</span>
+              <span class="fw-bold text-muted">Visible only to the reporter and campus administration</span>
             {% else %}
               <span class="fw-bold text-dark">{{ item.contact_phone or 'Available via Admin' }}</span>
             {% endif %}
           </div>
         </div>
 
-        {% if item.status == 'open' and current_user and current_user.id != item.user_id %}
-        <form method="POST" action="{{ url_for('lost_found.claim_item', item_id=item.id) }}">
-          <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
-            <i class="fa-solid fa-hand-holding-hand me-1"></i> Claim This Item (Verify Ownership)
-          </button>
-        </form>
+        <!-- Status timeline (Phase 4: collect & return tracking) -->
+        <div class="d-flex flex-wrap gap-2 small mb-4">
+          <span class="badge bg-light text-dark border"><i class="fa-solid fa-flag me-1 text-primary"></i>Reported {{ item.created_at.strftime('%d %b') if item.created_at }}</span>
+          {% if item.status in ('matched', 'claimed', 'closed') %}
+          <span class="badge bg-light text-dark border"><i class="fa-solid fa-link me-1 text-warning"></i>Matched / Verified</span>
+          {% endif %}
+          {% if item.claimed_by_user_id %}
+          <span class="badge bg-light text-dark border"><i class="fa-solid fa-hand-holding-hand me-1 text-info"></i>Claimed</span>
+          {% endif %}
+          {% if item.status == 'closed' and item.collected_at %}
+          <span class="badge bg-success"><i class="fa-solid fa-box-archive me-1"></i>Collected &amp; Returned {{ item.collected_at.strftime('%d %b %Y') }}</span>
+          {% endif %}
+        </div>
+
+        <!-- Claim box -->
+        {% if not mask_contact and current_user and current_user.id == item.user_id %}
+          <div class="alert alert-info small mb-0 rounded-3">
+            <i class="fa-solid fa-circle-info me-1"></i> This is your report. Pending claims are listed in the verification panel on the right.
+          </div>
+        {% elif item.status in ('open', 'matched') and current_user and current_user.id != item.user_id and current_user.role != 'visitor' %}
+          {% if my_pending_claim %}
+            <div class="alert alert-warning small rounded-3 mb-0">
+              <i class="fa-solid fa-hourglass-half me-1"></i> Your claim on this item is <strong>pending administration verification</strong>.
+            </div>
+          {% else %}
+          <div class="border-top pt-3">
+            <h6 class="fw-bold"><i class="fa-solid fa-hand-holding-hand text-primary me-1"></i> Claim This Item</h6>
+            <p class="small text-muted mb-2">Describe identifying details only the true owner would know (brand, scratches, contents). Your statement stays <strong>private</strong> and is reviewed only by campus administration before any handover.</p>
+            <form method="POST" action="{{ url_for('lost_found.claim_item', item_id=item.id) }}">
+              <textarea name="proof_statement" rows="3" class="form-control mb-2" placeholder="e.g. The bottle has a USN sticker 4GH22CS054 and a dent near the cap..." required minlength="15"></textarea>
+              <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fa-solid fa-paper-plane me-1"></i> Submit Claim for Verification
+              </button>
+            </form>
+          </div>
+          {% endif %}
+        {% elif not current_user %}
+          <div class="alert alert-secondary small rounded-3 mb-0">
+            <a href="{{ url_for('auth.login') }}">Sign in</a> to report a match or claim this item.
+          </div>
         {% endif %}
 
       </div>
     </div>
 
-    <!-- AI Matches Side Panel -->
+    <!-- Right Column: AI Matches (authorized users) + Claim Status (owner) -->
     <div class="col-lg-5">
-      <div class="card campus-card border-0 shadow-sm p-4">
+      <div class="card campus-card border-0 shadow-sm p-4 mb-4">
         
         <div class="d-flex align-items-center gap-2 mb-3">
           <i class="fa-solid fa-brain text-success fa-xl"></i>
           <div>
-            <h5 class="fw-bold text-dark mb-0">AI Image Similarity Matches</h5>
-            <div class="small text-muted">Automated OpenCV visual recommendations</div>
+            <h5 class="fw-bold text-dark mb-0">AI Similarity Matches</h5>
+            <div class="small text-muted">Image embedding + category, colour, date &amp; location ranking</div>
           </div>
         </div>
 
-        {% if matches %}
-          <p class="small text-muted mb-3">
-            Our image comparison model detected possible correlation with the following counterpart reports:
-          </p>
-
+        {% if is_owner or is_admin %}
+          {% if matches %}
+          <div class="alert alert-warning small rounded-3 py-2">
+            <i class="fa-solid fa-scale-unbalanced me-1"></i>
+            <strong>Possible matches only.</strong> A similarity score is <em>not</em> proof of ownership &mdash; campus administration verifies every claim before handover.
+          </div>
           <div class="list-group list-group-flush">
             {% for m in matches %}
               {% set counterpart = m.found_item if item.report_type == 'lost' else m.lost_item %}
+              {% set score = m.composite_score if m.composite_score is not none else m.similarity_score %}
               <div class="list-group-item p-3 border rounded-3 mb-2 bg-light">
                 <div class="d-flex justify-content-between align-items-start mb-2">
                   <span class="badge badge-ai-match">
-                    <i class="fa-solid fa-check-double me-1"></i> {{ (m.similarity_score * 100)|round(1) }}% Match Score
+                    <i class="fa-solid fa-check-double me-1"></i> {{ (score * 100)|round(1) }}% Confidence
                   </span>
                   <span class="badge bg-secondary text-uppercase">{{ counterpart.report_type }}</span>
                 </div>
 
                 <h6 class="fw-bold text-dark mb-1">{{ counterpart.title }}</h6>
-                <div class="small text-muted mb-2">
+                <div class="small text-muted mb-1">
                   <i class="fa-solid fa-location-dot me-1 text-danger"></i> {{ counterpart.location_reported }}
+                  <i class="fa-regular fa-clock me-1 ms-2"></i> {{ counterpart.date_time_reported.strftime('%d %b %Y') if counterpart.date_time_reported }}
                 </div>
-                <p class="small text-muted mb-2 text-truncate">{{ counterpart.description }}</p>
 
-                <a href="{{ url_for('lost_found.item_detail', item_id=counterpart.id) }}" class="btn btn-xs btn-outline-success rounded-pill">
-                  View Matching Item <i class="fa-solid fa-arrow-right ms-1"></i>
+                {% if m.factors %}
+                {% set f = m.factors|from_json %}
+                <div class="d-flex flex-wrap gap-1 mb-2">
+                  <span class="badge bg-light text-dark border" style="font-size:0.65rem;">Image {{ (m.similarity_score * 100)|round(0)|int }}%</span>
+                  <span class="badge bg-light text-dark border" style="font-size:0.65rem;">Category {{ (f.category * 100)|round(0)|int }}%</span>
+                  <span class="badge bg-light text-dark border" style="font-size:0.65rem;">Colour {{ (f.colour * 100)|round(0)|int }}%</span>
+                  <span class="badge bg-light text-dark border" style="font-size:0.65rem;">Date {{ (f.date_proximity * 100)|round(0)|int }}%</span>
+                  <span class="badge bg-light text-dark border" style="font-size:0.65rem;">Location {{ (f.location * 100)|round(0)|int }}%</span>
+                </div>
+                {% endif %}
+
+                <a href="{{ url_for('lost_found.item_detail', item_id=counterpart.id) }}" class="btn btn-sm btn-outline-success rounded-pill">
+                  View Matching Report <i class="fa-solid fa-arrow-right ms-1"></i>
                 </a>
               </div>
             {% endfor %}
           </div>
-        {% else %}
+          {% else %}
           <div class="text-center py-4 bg-light rounded-3">
             <i class="fa-solid fa-magnifying-glass-chart fa-3x text-muted mb-2 d-block"></i>
-            <h6 class="fw-bold text-dark mb-1">No AI Similarity Matches Found Yet</h6>
-            <p class="small text-muted mb-0 px-3">
-              When another user reports a counterpart item with a similar photo, the AI model will automatically index and list it here.
-            </p>
+            <h6 class="fw-bold text-dark mb-1">No Possible Matches Yet</h6>
+            <p class="small text-muted mb-0 px-3">When another user reports a counterpart item, the AI engine indexes it here and notifies you automatically.</p>
+          </div>
+          {% endif %}
+        {% else %}
+          <div class="text-center py-4 bg-light rounded-3">
+            <i class="fa-solid fa-user-shield fa-3x text-muted mb-2 d-block"></i>
+            <h6 class="fw-bold text-dark mb-1">Match List Is Private</h6>
+            <p class="small text-muted mb-0 px-3">Possible matches are visible only to the report owner and campus administration. If you believe this item is yours, submit a claim &mdash; it will be verified before any handover.</p>
           </div>
         {% endif %}
 
       </div>
+
+      {% if is_owner or is_admin %}
+      <div class="card campus-card border-0 shadow-sm p-4">
+        <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-stamp text-primary me-2"></i>Claims &amp; Verification</h5>
+        {% if claims %}
+          <p class="small text-muted">Similarity is not ownership. Review claims below; proof statements are shown only to Main Admin.</p>
+          {% for c in claims %}
+          <div class="border rounded-3 p-3 mb-2 bg-light small">
+            <div class="d-flex justify-content-between">
+              <strong>{{ c.claimant.full_name if c.claimant else 'Unknown claimant' }}</strong>
+              <span class="badge {% if c.status == 'pending' %}bg-warning text-dark{% elif c.status == 'approved' %}bg-success{% else %}bg-danger{% endif %} text-uppercase">{{ c.status }}</span>
+            </div>
+            <div class="text-muted mb-1">{{ c.created_at.strftime('%d %b %Y, %H:%M') if c.created_at }}</div>
+            {% if is_admin %}
+            <div class="fst-italic border-start ps-2 mb-1">"{{ c.proof_statement }}"</div>
+            {% if c.decision_note %}<div class="text-secondary">Admin note: {{ c.decision_note }}</div>{% endif %}
+            {% endif %}
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="small text-muted mb-0">No ownership claims recorded on this report yet.</p>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
 
   </div>

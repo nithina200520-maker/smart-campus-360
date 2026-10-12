@@ -142,6 +142,40 @@
           </a>
 
           {% if current_user %}
+            <!-- Phase 4: In-App Notification Bell (targeted alerts only) -->
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary rounded-pill position-relative px-3" type="button" data-bs-toggle="dropdown" title="Notifications">
+                <i class="fa-regular fa-bell"></i>
+                {% if unread_notifications %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem;">{{ unread_notifications }}</span>
+                {% endif %}
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="width: 340px;">
+                <li class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+                  <span class="fw-bold small">Notifications</span>
+                  <a class="small text-decoration-none" href="{{ url_for('notifications.index') }}">View all</a>
+                </li>
+                {% for note in latest_notifications %}
+                <li>
+                  <a class="dropdown-item small py-2 {% if not note.is_read %}bg-light{% endif %}" href="{{ note.link_url or url_for('notifications.index') }}">
+                    <span class="fw-bold d-block text-truncate" style="max-width: 300px;">{{ note.title }}</span>
+                    <span class="text-muted d-block text-truncate" style="max-width: 300px;">{{ note.message }}</span>
+                    <span class="text-muted" style="font-size: 0.68rem;">{{ note.created_at.strftime('%d %b, %H:%M') if note.created_at }}</span>
+                    {% if not note.is_read %}<span class="badge bg-primary ms-1" style="font-size: 0.6rem;">NEW</span>{% endif %}
+                  </a>
+                </li>
+                {% else %}
+                <li class="px-3 py-3 text-center text-muted small">No notifications yet.<br>Match and claim alerts will appear here.</li>
+                {% endfor %}
+                <li><hr class="dropdown-divider"></li>
+                <li class="px-3 pb-2">
+                  <form method="POST" action="{{ url_for('notifications.mark_all_read') }}">
+                    <button class="btn btn-sm btn-outline-secondary rounded-pill w-100">Mark all as read</button>
+                  </form>
+                </li>
+              </ul>
+            </div>
+
             <div class="dropdown">
               <button class="btn btn-primary rounded-pill dropdown-toggle px-3" type="button" data-bs-toggle="dropdown">
                 <i class="fa-solid fa-user-circle me-1"></i> {{ current_user.full_name.split()[0] }}
@@ -149,6 +183,8 @@
               <ul class="dropdown-menu dropdown-menu-end shadow border-0">
                 <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}"><i class="fa-solid fa-id-card me-2"></i> My Profile</a></li>
                 <li><a class="dropdown-item" href="{{ url_for('canteen.my_orders') }}"><i class="fa-solid fa-receipt me-2"></i> My Canteen Orders</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('lost_found.my_reports') }}"><i class="fa-solid fa-boxes-stacked me-2"></i> My Lost &amp; Found Reports</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('notifications.index') }}"><i class="fa-regular fa-bell me-2"></i> Notification History</a></li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}"><i class="fa-solid fa-right-from-bracket me-2"></i> Sign Out</a></li>
               </ul>

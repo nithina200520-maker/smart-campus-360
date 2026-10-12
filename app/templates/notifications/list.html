@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}My Notifications{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 860px;">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <div>
+      <span class="badge bg-primary px-3 py-1 rounded-pill mb-1">
+        <i class="fa-regular fa-bell me-1"></i> Phase 4 &bull; In-App Notifications
+      </span>
+      <h2 class="fw-bold text-dark mb-0">Notification History</h2>
+      <p class="text-muted small mb-0">
+        You are alerted only when a report, match or claim that involves <strong>you</strong> changes. No broadcast spam.
+        {% if unread_notifications %}<span class="badge bg-danger rounded-pill ms-1">{{ unread_notifications }} unread</span>{% endif %}
+      </p>
+    </div>
+    <div class="d-flex gap-2 mt-2 mt-md-0">
+      <a href="{{ url_for('notifications.index', unread='1') }}" class="btn btn-sm btn-outline-primary rounded-pill {% if only_unread %}active fw-bold{% endif %}">
+        <i class="fa-regular fa-envelope me-1"></i> {% if only_unread %}Showing unread{% else %}Unread only{% endif %}
+      </a>
+      {% if unread_notifications %}
+      <form method="POST" action="{{ url_for('notifications.mark_all_read') }}" class="d-inline">
+        <button class="btn btn-sm btn-primary rounded-pill fw-bold">
+          <i class="fa-solid fa-check-double me-1"></i> Mark all read
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if notifications %}
+  <div class="list-group shadow-sm">
+    {% for note in notifications %}
+    <div class="list-group-item list-group-item-action border-0 border-bottom py-3 {% if not note.is_read %}bg-light{% endif %}">
+      <div class="d-flex justify-content-between align-items-start">
+        <div class="me-3 flex-grow-1">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge {% if note.category == 'match' %}bg-success{% elif note.category == 'claim' %}bg-warning text-dark{% elif note.category == 'return' %}bg-primary{% elif note.category == 'admin' %}bg-danger{% else %}bg-secondary{% endif %} text-uppercase" style="font-size: 0.65rem;">
+              {{ note.category }}
+            </span>
+            <a href="{{ note.link_url or url_for('notifications.index') }}" class="fw-bold text-dark text-decoration-none stretched-link">
+              {{ note.title }}
+            </a>
+            {% if not note.is_read %}<span class="dot bg-danger rounded-circle" style="width: 8px; height: 8px; display: inline-block;"></span>{% endif %}
+          </div>
+          <p class="mb-1 small text-secondary">{{ note.message }}</p>
+          <span class="text-muted" style="font-size: 0.72rem;">
+            <i class="fa-regular fa-clock me-1"></i>{{ note.created_at.strftime('%d %b %Y, %H:%M') if note.created_at else '' }}
+          </span>
+        </div>
+        {% if not note.is_read %}
+        <form method="POST" action="{{ url_for('notifications.mark_read', note_id=note.id) }}" class="position-relative" style="z-index: 20;">
+          <button class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap" title="Mark as read">
+            <i class="fa-solid fa-check"></i>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center py-5 bg-white rounded-4 border">
+    <i class="fa-regular fa-bell-slash fa-3x text-muted mb-3 d-block"></i>
+    <h5 class="fw-bold text-dark">Nothing here yet.</h5>
+    <p class="text-muted small">
+      {% if only_unread %}You have no unread notifications.{% else %}When a possible match or claim involves one of your reports, it will appear here.{% endif %}
+    </p>
+    <a href="{{ url_for('lost_found.index') }}" class="btn btn-success rounded-pill px-4">Open Lost &amp; Found Registry</a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

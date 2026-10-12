@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 from flask import Flask, render_template
 from app.config import config_by_name, Config
 from app.database import db, init_db_connection
@@ -28,11 +29,31 @@ def create_app(config_name="default"):
     # Initialize Database
     init_db_connection(app)
 
+    # Phase 4: Jinja helper to parse a stored JSON string (match factor breakdown)
+    @app.template_filter('from_json')
+    def from_json_filter(value):
+        if not value:
+            return {}
+        try:
+            return json.loads(value)
+        except (ValueError, TypeError):
+            return {}
+
     # Register Context Processors for global template access
     @app.context_processor
     def inject_global_template_vars():
+        user = get_current_user()
+        unread_count = 0
+        latest_notifications = []
+        if user:
+            from app.models import Notification
+            unread_count = Notification.query.filter_by(user_id=user.id, is_read=False).count()
+            latest_notifications = (Notification.query.filter_by(user_id=user.id)
+                                    .order_by(Notification.created_at.desc()).limit(5).all())
         return {
-            "current_user": get_current_user(),
+            "current_user": user,
+            "unread_notifications": unread_count,
+            "latest_notifications": latest_notifications,
             "COLLEGE_NAME": app.config.get("COLLEGE_NAME"),
             "COLLEGE_LOCATION": app.config.get("COLLEGE_LOCATION"),
             "APP_NAME": app.config.get("APP_NAME"),
@@ -47,6 +68,7 @@ def create_app(config_name="default"):
     from app.blueprints.navigation import navigation_bp
     from app.blueprints.lost_found import lost_found_bp
     from app.blueprints.canteen import canteen_bp
+    from app.blueprints.notifications import notifications_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -55,6 +77,7 @@ def create_app(config_name="default"):
     app.register_blueprint(navigation_bp)
     app.register_blueprint(lost_found_bp)
     app.register_blueprint(canteen_bp)
+    app.register_blueprint(notifications_bp)
 
     # Register Error Handlers
     @app.errorhandler(403)

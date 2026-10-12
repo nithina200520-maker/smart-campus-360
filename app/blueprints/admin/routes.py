@@ -5,7 +5,7 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask import render_template, request, redirect, url_for, flash, current_app, Response
 from app.blueprints.admin import admin_bp
-from app.models import User, NavigationNode, NavigationEdge, CampusFloorPlan, LostFoundItem, CanteenItem, CanteenOrder, AuditLog
+from app.models import User, NavigationNode, NavigationEdge, CampusFloorPlan, LostFoundItem, LostFoundClaim, LostFoundMatch, Notification, CanteenItem, CanteenOrder, AuditLog
 from app.database import db
 from app.utils.auth_helpers import role_required, get_current_user
 
@@ -567,3 +567,162 @@ def import_navigation_data(kind=None):
                  details=f"Imported {kind} CSV: {created} created, {skipped} skipped.", ip_address=request.remote_addr)
     flash(f"Import finished: {created} {kind} record(s) created, {skipped} skipped.", "success")
     return redirect(url_for('admin.manage_navigation'))
+
+# ---------------------------------------------------------------------------
+# PHASE 4: LOST & FOUND ADMINISTRATION - review, verify, disputes, returns
+# ---------------------------------------------------------------------------
+
+@admin_bp.route('/lost-found')
+@role_required('main_admin')
+def manage_lost_found():
+    """Main Admin Lost & Found command center: reports, claims queue, notification history."""
+    user = get_current_user()
+    status_f = request.args.get('status')
+    query = LostFoundItem.query.order_by(LostFoundItem.date_time_reported.desc())
+    if status_f in ('open', 'matched', 'claimed', 'closed'):
+        query = query.filter_by(status=status_f)
+    items = query.limit(200).all()
+    pending_claims = LostFoundClaim.query.filter_by(status='pending').order_by(LostFoundClaim.created_at.desc()).all()
+    recent_notifications = Notification.query.order_by(Notification.created_at.desc()).limit(60).all()
+    stats = {
+        'open': LostFoundItem.query.filter_by(status='open').count(),
+        'claimed': LostFoundItem.query.filter_by(status='claimed').count(),
+        'returned': LostFoundItem.query.filter_by(status='closed').count(),
+        'pending_claims': len(pending_claims),
+    }
+    return render_template('admin/lost_found.html', user=user, items=items,
+                           pending_claims=pending_claims, notifications=recent_notifications,
+                           stats=stats, current_status=status_f)
+
+@admin_bp.route('/lost-found/item/<int:item_id>/update-location', methods=['POST'])
+@role_required('main_admin')
+def lf_update_location(item_id):
+    user = get_current_user()
+    item = LostFoundItem.query.get_or_404(item_id)
+    new_location = request.form.get('location_reported', '').strip()
+    if not new_location:
+        flash("New location is required.", "danger")
+        return redirect(url_for('admin.manage_lost_found'))
+    old = item.location_reported
+    item.location_reported = new_location
+    Notification.notify(item.user_id, title="Report location updated by administration",
+                        message=f"The recorded location of '{item.title}' was updated from '{old}' to '{new_location}'. Follow collection instructions at the new location.",
+                        category='admin', link_url=url_for('lost_found.item_detail', item_id=item.id))
+    AuditLog.log(action='LF_LOCATION_UPDATED', module='LOST_FOUND', user_id=user.id,
+                 details=f"Item {item.id} location '{old}' -> '{new_location}'.", ip_address=request.remote_addr)
+    db.session.commit()
+    flash("Item location updated and reporter notified.", "success")
+    return redirect(url_for('admin.manage_lost_found'))
+
+@admin_bp.route('/lost-found/item/<int:item_id>/verify', methods=['POST'])
+@role_required('main_admin')
+def lf_verify_item(item_id):
+    """Authorized verification that a found item is genuine and in campus custody."""
+    user = get_current_user()
+    item = LostFoundItem.query.get_or_404(item_id)
+    item.verified_by_admin_id = user.id
+    if item.status == 'open':
+        item.status = 'matched'
+    Notification.notify(item.user_id, title="Your report was verified by campus administration",
+                        message=f"'{item.title}' has been officially verified and logged by the Lost & Found office.",
+                        category='admin', link_url=url_for('lost_found.item_detail', item_id=item.id))
+    AuditLog.log(action='LF_ITEM_VERIFIED', module='LOST_FOUND', user_id=user.id,
+                 details=f"Verified item '{item.title}' (id {item.id}).", ip_address=request.remote_addr)
+    db.session.commit()
+    flash(f"Item '{item.title}' marked as verified.", "success")
+    return redirect(url_for('admin.manage_lost_found'))
+
+@admin_bp.route('/lost-found/claim/<int:claim_id>/decision', methods=['POST'])
+@role_required('main_admin')
+def lf_claim_decision(claim_id):
+    """Approve or reject an ownership claim (dispute resolution). Similarity score is never proof."""
+    user = get_current_user()
+    claim = LostFoundClaim.query.get_or_404(claim_id)
+    if claim.status != 'pending':
+        flash("This claim was already decided.", "info")
+        return redirect(url_for('admin.manage_lost_found'))
+
+    decision = request.form.get('decision')  # 'approve' | 'reject'
+    note = request.form.get('decision_note', '').strip()
+    item = claim.item
+    claim.decided_by_admin_id = user.id
+    claim.decision_note = note or None
+    claim.decided_at = datetime.utcnow()
+
+    if decision == 'approve':
+        claim.status = 'approved'
+        item.status = 'claimed'
+        item.claimed_by_user_id = claim.claimant_id
+        Notification.notify(claim.claimant_id, title="Your claim was approved",
+                            message=f"Ownership verified for '{item.title}'. Collect the item from the campus Lost & Found office with valid ID.",
+                            category='claim', link_url=url_for('lost_found.item_detail', item_id=item.id))
+        AuditLog.log(action='LF_CLAIM_APPROVED', module='LOST_FOUND', user_id=user.id,
+                     details=f"Approved claim {claim.id} on item '{item.title}'.", ip_address=request.remote_addr)
+    else:
+        claim.status = 'rejected'
+        item.status = 'open'
+        item.claimed_by_user_id = None
+        if note:
+            item.resolution_note = f"Rejected claim dispute note: {note}"
+        Notification.notify(claim.claimant_id, title="Your claim was not approved",
+                            message=f"The claim on '{item.title}' was rejected after review. {note}".strip(),
+                            category='claim', link_url=url_for('lost_found.item_detail', item_id=item.id))
+        AuditLog.log(action='LF_CLAIM_REJECTED', module='LOST_FOUND', user_id=user.id,
+                     details=f"Rejected claim {claim.id} on item '{item.title}'.", ip_address=request.remote_addr)
+
+    Notification.notify(item.user_id, title=f"Update on your report '{item.title}'",
+                        message=f"Campus administration reviewed a claim on your report: decision recorded ({claim.status}).",
+                        category='claim', link_url=url_for('lost_found.item_detail', item_id=item.id))
+    db.session.commit()
+    flash(f"Claim {claim.status}.", "success")
+    return redirect(url_for('admin.manage_lost_found'))
+
+@admin_bp.route('/lost-found/item/<int:item_id>/record-return', methods=['POST'])
+@role_required('main_admin')
+def lf_record_return(item_id):
+    """Track the physical handover: mark item collected and returned to its owner."""
+    user = get_current_user()
+    item = LostFoundItem.query.get_or_404(item_id)
+    note = request.form.get('handover_note', '').strip()
+
+    if not item.claimed_by_user_id:
+        flash("Assign an approved claimant before recording a return.", "danger")
+        return redirect(url_for('admin.manage_lost_found'))
+
+    item.status = 'closed'
+    item.collected_at = datetime.utcnow()
+    item.verified_by_admin_id = user.id
+    if note:
+        item.resolution_note = f"Handover: {note}"
+
+    recipient = item.claimed_by_user_id
+    Notification.notify(recipient, title="Return recorded - thank you for using Smart Campus 360",
+                        message=f"'{item.title}' was collected and officially returned to you. The report is now closed.",
+                        category='return', link_url=url_for('lost_found.item_detail', item_id=item.id))
+    Notification.notify(item.user_id, title="Your reported item was returned",
+                        message=(f"'{item.title}' has been handed over to its verified owner and the report is closed. "
+                                 "Thank you for your honesty in reporting it."),
+                        category='return', link_url=url_for('lost_found.item_detail', item_id=item.id))
+    AuditLog.log(action='LF_ITEM_RETURNED', module='LOST_FOUND', user_id=user.id,
+                 details=f"Recorded return of item {item.id} '{item.title}' to user {recipient}.", ip_address=request.remote_addr)
+    db.session.commit()
+    flash("Item return recorded; both parties notified.", "success")
+    return redirect(url_for('admin.manage_lost_found'))
+
+@admin_bp.route('/lost-found/notify/<int:user_id>', methods=['POST'])
+@role_required('main_admin')
+def lf_send_notification(user_id):
+    """Send a single targeted in-app notification (never a broadcast)."""
+    admin = get_current_user()
+    target = User.query.get_or_404(user_id)
+    title = request.form.get('title', '').strip()
+    message = request.form.get('message', '').strip()
+    if not title or not message:
+        flash("Notification title and message are required.", "danger")
+        return redirect(url_for('admin.manage_lost_found'))
+    Notification.notify(target.id, title=title, message=message, category='admin')
+    AuditLog.log(action='LF_ADMIN_NOTIFICATION_SENT', module='LOST_FOUND', user_id=admin.id,
+                 details=f"Targeted notification '{title}' to user {target.email}.", ip_address=request.remote_addr)
+    db.session.commit()
+    flash(f"Notification sent to {target.full_name}.", "success")
+    return redirect(url_for('admin.manage_lost_found'))

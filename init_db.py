@@ -407,6 +407,7 @@ def seed_database():
                 location_reported="Near Computer Science Lab 2 (1st Floor)",
                 date_time_reported=datetime.utcnow() - timedelta(days=1),
                 description="Black scientific calculator with yellow sticker on the back cover. Has USN inscribed.",
+                color_hint="Black",
                 contact_phone="+91 98450 44004",
                 status="open"
             ),
@@ -418,6 +419,7 @@ def seed_database():
                 location_reported="Central Library Reading Desk #14",
                 date_time_reported=datetime.utcnow() - timedelta(hours=18),
                 description="Scientific calculator left on desk. Deposited at Security Desk.",
+                color_hint="Black",
                 contact_phone="+91 98450 11001",
                 status="open"
             ),
@@ -429,6 +431,7 @@ def seed_database():
                 location_reported="College Canteen Outdoor Tables",
                 date_time_reported=datetime.utcnow() - timedelta(days=2),
                 description="Milton blue insulated 750ml flask with scratch near base.",
+                color_hint="Blue",
                 contact_phone="+91 98450 44004",
                 status="open"
             )
@@ -446,6 +449,8 @@ def seed_database():
                 lost_item_id=calc_lost.id,
                 found_item_id=calc_found.id,
                 similarity_score=0.88,
+                composite_score=0.9,
+                factors='{"category": 1.0, "colour": 1.0, "date_proximity": 0.95, "location": 0.0, "blended": 0.93}',
                 status="suggested"
             )
             db.session.add(match)

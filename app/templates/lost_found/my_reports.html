@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}My Lost &amp; Found Reports{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-4">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <div>
+      <span class="badge bg-success px-3 py-1 rounded-pill mb-1">
+        <i class="fa-solid fa-boxes-stacked me-1"></i> Phase 4 &bull; Personal Lost &amp; Found Dashboard
+      </span>
+      <h2 class="fw-bold text-dark mb-0">My Reports &amp; Claims</h2>
+      <p class="text-muted small mb-0">Track the status of everything you reported and every claim you have filed.</p>
+    </div>
+    <div class="d-flex gap-2 mt-2 mt-md-0">
+      <a href="{{ url_for('lost_found.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill">
+        <i class="fa-solid fa-arrow-left me-1"></i> Registry
+      </a>
+      <a href="{{ url_for('lost_found.report_item') }}" class="btn btn-sm btn-success rounded-pill fw-bold">
+        <i class="fa-solid fa-plus me-1"></i> New Report
+      </a>
+    </div>
+  </div>
+
+  <!-- My Reports -->
+  <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-file-circle-exclamation text-primary me-2"></i>Reports I Filed ({{ items|length }})</h5>
+  <div class="row g-3 mb-5">
+    {% for item in items %}
+    <div class="col-md-6 col-xl-4">
+      <div class="card campus-card h-100 border-0 shadow-sm">
+        <div class="card-body p-3 d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <span class="badge {% if item.report_type == 'lost' %}bg-danger{% else %}bg-success{% endif %} text-uppercase">{{ item.report_type }}</span>
+            <span class="badge {% if item.status == 'closed' %}bg-primary{% elif item.status == 'claimed' %}bg-warning text-dark{% elif item.status == 'matched' %}bg-info text-dark{% else %}bg-secondary{% endif %} text-uppercase">{{ item.status }}</span>
+          </div>
+          <h6 class="fw-bold text-dark mb-1 text-truncate" title="{{ item.title }}">{{ item.title }}</h6>
+          <p class="small text-muted mb-2">
+            <i class="fa-solid fa-location-dot text-danger me-1"></i>{{ item.location_reported }}<br>
+            <i class="fa-regular fa-clock text-primary me-1"></i>{{ item.date_time_reported.strftime('%d %b %Y, %H:%M') if item.date_time_reported else '-' }}
+          </p>
+          <div class="small mb-2">
+            {% if item.report_type == 'lost' %}
+              <span class="text-muted">Claims received:</span> <span class="fw-bold">{{ item.claims|selectattr('status','equalto','pending')|list|length }} pending</span>
+            {% else %}
+              <span class="text-muted">Custody:</span> <span class="fw-bold">with reporter</span>
+            {% endif %}
+          </div>
+          <a href="{{ url_for('lost_found.item_detail', item_id=item.id) }}" class="btn btn-sm btn-outline-primary rounded-pill w-100 mt-auto fw-bold">
+            <i class="fa-solid fa-wand-magic-sparkles me-1"></i> View Matches &amp; Claims
+          </a>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+      <div class="text-center py-5 bg-white rounded-4 border">
+        <i class="fa-solid fa-box-open fa-3x text-muted mb-3 d-block"></i>
+        <h5 class="fw-bold text-dark">You have not filed any reports yet.</h5>
+        <a href="{{ url_for('lost_found.report_item') }}" class="btn btn-success rounded-pill px-4 mt-2">Report Your First Item</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- My Claims -->
+  <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-hand-holding-heart text-primary me-2"></i>Claims I Submitted ({{ claims|length }})</h5>
+  <div class="card campus-card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">Item Claimed</th>
+              <th>Submitted</th>
+              <th>My Proof Statement</th>
+              <th>Decision Note</th>
+              <th class="pe-4 text-end">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in claims %}
+            <tr>
+              <td class="ps-4">
+                <a href="{{ url_for('lost_found.item_detail', item_id=c.item_id) }}" class="fw-bold text-dark text-decoration-none">
+                  {{ c.item.title if c.item else 'Item #'+ (c.item_id|string) }}
+                </a>
+                <div class="text-muted" style="font-size:0.72rem;">{{ c.item.report_type.upper() if c.item else '' }}</div>
+              </td>
+              <td class="small text-muted text-nowrap">{{ c.created_at.strftime('%d %b %Y, %H:%M') if c.created_at else '-' }}</td>
+              <td class="small text-secondary" style="max-width:320px;">{{ c.proof_statement }}</td>
+              <td class="small text-secondary" style="max-width:260px;">{{ c.decision_note or '-' }}</td>
+              <td class="pe-4 text-end">
+                <span class="badge {% if c.status == 'approved' %}bg-success{% elif c.status == 'rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %} text-uppercase">{{ c.status }}</span>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center py-5 text-muted">
+                <i class="fa-solid fa-hand-holding-heart fa-3x text-muted mb-3 d-block"></i>
+                You have not claimed any items. Open the registry to find a match for something you lost.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info mt-4 small rounded-3 mb-0">
+    <i class="fa-solid fa-circle-info me-1"></i>
+    Similarity scores are <strong>guidance only &mdash; never proof of ownership</strong>. All claims are verified by campus administration before any item is handed over.
+  </div>
+
+</div>
+{% endblock %}

@@ -34,7 +34,7 @@ def test_visitor_cannot_see_private_contact_data(client, users, db):
     body = client.get(f"/lost-found/item/{item.id}").get_data(as_text=True)
     assert "+91 98450 44004" not in body
     assert "Sneha Patil" not in body
-    assert "Restricted (Visitor Access)" in body
+    assert "Private (coordinate via a claim)" in body
 
 
 def test_student_can_still_see_report_details(client, users, db):
@@ -70,6 +70,8 @@ def test_visitor_cannot_file_ownership_claims(client, users, db):
 def test_verified_teacher_can_file_claim(client, users, db):
     item = _seed_report(db, users)
     login(client, "teacher@gechassan.ac.in")
-    client.post(f"/lost-found/item/{item.id}/claim")
+    client.post(f"/lost-found/item/{item.id}/claim",
+                data={"proof_statement": "This wallet is mine; it holds my FE enrollment receipt."})
     db.session.refresh(item)
     assert item.claimed_by_user_id == users["teacher_verified"].id
+    assert item.status == "claimed"
