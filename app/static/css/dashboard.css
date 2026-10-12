@@ -69,6 +69,23 @@ html[data-theme="dark"] {
   opacity: 0.6;
 }
 
+/* ============================== SNOW / SPARKLE SHIMMER ============================== */
+.sc-snow { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.sc-flake {
+  position: absolute; top: -6vh;
+  width: var(--sz, 6px); height: var(--sz, 6px); border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #ffffff 0%, #cfe8ff 45%, rgba(160,210,255,0) 72%);
+  box-shadow: 0 0 6px rgba(150,205,255,0.9), 0 0 14px rgba(90,160,255,0.55);
+  opacity: 0;
+  animation: sc-fall var(--dur, 12s) linear var(--delay, 0s) infinite,
+             sc-twinkle var(--tw, 3s) ease-in-out var(--delay, 0s) infinite;
+  will-change: transform, opacity;
+}
+html[data-theme="dark"] .sc-flake { background: radial-gradient(circle at 50% 50%, #ffffff 0%, #9fd0ff 45%, rgba(80,150,255,0) 72%); }
+.sc-flake.star { background: none; border-radius: 0; box-shadow: none; color: #eaf4ff; font-size: var(--sz, 10px); line-height: 1; text-shadow: 0 0 8px rgba(120,190,255,0.95), 0 0 16px rgba(80,150,255,0.7); }
+@keyframes sc-fall { 0% { transform: translate3d(0, -6vh, 0); } 100% { transform: translate3d(var(--drift, 0px), 110vh, 0); } }
+@keyframes sc-twinkle { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.95; } }
+
 /* ============================== SIDEBAR ============================== */
 .sc-sidebar {
   position: fixed; inset: 0 auto 0 0; width: 262px; z-index: 40;
@@ -331,4 +348,5 @@ html[data-theme="dark"] .sc-banner-veil { background: linear-gradient(100deg, rg
   .sc-fcard, .sc-btn, .sc-icon-btn, .sc-user, .sc-nav, .sc-row { transition: none; }
   .reveal { opacity: 1; transform: none; }
   .sc-qfind .sc-qpin { animation: none; }
+  .sc-snow { display: none; }
 }
