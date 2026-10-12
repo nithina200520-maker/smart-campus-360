@@ -87,8 +87,8 @@ html[data-theme="dark"] .sc-flake { background: radial-gradient(circle at 50% 50
 @keyframes sc-fall { 0% { transform: translate3d(0, -6vh, 0); } 100% { transform: translate3d(var(--drift, 0px), 110vh, 0); } }
 @keyframes sc-twinkle { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.95; } }
 
-/* ============================== CIRCULAR LIGHT RAYS (in front) ============================== */
-.sc-rays2 { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
+/* ============================== CIRCULAR LIGHT RAYS (behind the glass) ============================== */
+.sc-rays2 { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
 .sc-burst {
   position: absolute; top: 50%; left: 50%; width: 170vmax; height: 170vmax;
   transform: translate(-50%, -50%);
