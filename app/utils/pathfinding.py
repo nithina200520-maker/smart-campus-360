@@ -145,6 +145,7 @@ def find_route(start_node_id: int, target_node_id: int, algorithm: str = 'astar'
             "x": node.x_coord,
             "y": node.y_coord,
             "photo_url": node.photo_url or "/static/images/placeholder_node.jpg",
+            "is_panoramic": bool(node.is_panoramic),
             "is_sample_data": node.is_sample_data
         })
 

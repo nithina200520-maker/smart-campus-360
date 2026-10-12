@@ -5,7 +5,7 @@ from pathlib import Path
 from app import create_app
 from app.database import db
 from app.models import (
-    User, NavigationNode, NavigationEdge,
+    User, NavigationNode, NavigationEdge, CampusFloorPlan,
     CanteenCategory, CanteenItem, CanteenOrder, CanteenOrderItem,
     LostFoundItem, LostFoundMatch, AuditLog
 )
@@ -295,6 +295,24 @@ def seed_database():
             db.session.add(edge)
         db.session.commit()
         print("Campus navigation network graph seeded successfully.")
+
+        # Phase 3: additional sample navigation points, connections and floor plans
+        from app.utils.sample_navigation_data import (
+            PHASE3_SAMPLE_NODES, PHASE3_SAMPLE_EDGES, PHASE3_SAMPLE_FLOOR_PLANS
+        )
+        for spec in PHASE3_SAMPLE_NODES:
+            db.session.add(NavigationNode(**spec, is_accessible=True, is_sample_data=True))
+        db.session.commit()
+        node_map = {n.node_code: n.id for n in NavigationNode.query.all()}
+        for src_code, dst_code, distance, hint in PHASE3_SAMPLE_EDGES:
+            db.session.add(NavigationEdge(
+                source_node_id=node_map[src_code], target_node_id=node_map[dst_code],
+                distance_meters=distance, direction_hint=hint,
+                is_bidirectional=True, is_sample_data=True))
+        for spec in PHASE3_SAMPLE_FLOOR_PLANS:
+            db.session.add(CampusFloorPlan(**spec))
+        db.session.commit()
+        print("Phase 3 sample classrooms, HOD offices, corridors, staircases and floor plans seeded.")
 
         print("Seeding Canteen menu categories and items...")
         cat_bf = CanteenCategory(name="South Indian Breakfast", display_order=1)

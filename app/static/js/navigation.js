@@ -215,6 +215,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
       ctx.save();
 
+      // Phase 3: building/floor plan filter dims non-matching pins
+      if ((mapFilter.building && node.building !== mapFilter.building) ||
+          (mapFilter.floor && node.floor !== mapFilter.floor)) {
+        ctx.globalAlpha = 0.18;
+      }
+
       // Outer ring for route endpoints
       if (isStart) {
         ctx.strokeStyle = "#16a34a";
@@ -358,6 +364,76 @@ document.addEventListener('DOMContentLoaded', function () {
     renderMap();
   });
 
+  // PHASE 3: Full-screen campus map viewing
+  document.getElementById('btnFullscreen')?.addEventListener('click', () => {
+    const container = document.querySelector('.map-canvas-container');
+    if (!document.fullscreenElement) {
+      container.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen();
+    }
+  });
+
+  // PHASE 3: Building / floor filter (floor plans view)
+  const mapFilter = { building: '', floor: '' };
+  document.getElementById('filterBuilding')?.addEventListener('change', (e) => {
+    mapFilter.building = e.target.value;
+    renderMap();
+  });
+  document.getElementById('filterFloor')?.addEventListener('change', (e) => {
+    mapFilter.floor = e.target.value;
+    renderMap();
+  });
+
+  // PHASE 3: Uploaded digital floor plan viewer
+  const fpState = { zoom: 1, panX: 0, panY: 0, dragging: false, sx: 0, sy: 0 };
+  function applyFpTransform() {
+    const img = document.getElementById('floorPlanImg');
+    if (img) img.style.transform = `translate(${fpState.panX}px, ${fpState.panY}px) scale(${fpState.zoom})`;
+  }
+  document.getElementById('floorPlanSelect')?.addEventListener('change', (e) => {
+    const url = e.target.value;
+    const layer = document.getElementById('floorPlanLayer');
+    const backBtn = document.getElementById('btnBackToCampusMap');
+    if (!url) {
+      layer.classList.add('d-none');
+      backBtn.classList.add('d-none');
+      return;
+    }
+    const title = e.target.options[e.target.selectedIndex].dataset.title || 'Floor Plan';
+    document.getElementById('floorPlanTitle').innerText = title;
+    document.getElementById('floorPlanImg').src = url;
+    fpState.zoom = 1; fpState.panX = 0; fpState.panY = 0;
+    applyFpTransform();
+    layer.classList.remove('d-none');
+    backBtn.classList.remove('d-none');
+  });
+  document.getElementById('btnBackToCampusMap')?.addEventListener('click', () => {
+    document.getElementById('floorPlanLayer').classList.add('d-none');
+    document.getElementById('btnBackToCampusMap').classList.add('d-none');
+    const sel = document.getElementById('floorPlanSelect');
+    if (sel) sel.value = '';
+  });
+  const fpLayer = document.getElementById('floorPlanLayer');
+  if (fpLayer) {
+    fpLayer.addEventListener('dblclick', () => { fpState.zoom = Math.min(fpState.zoom * 1.4, 6); applyFpTransform(); });
+    fpLayer.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      fpState.zoom = Math.min(Math.max(fpState.zoom * (e.deltaY < 0 ? 1.15 : 0.87), 0.6), 6);
+      applyFpTransform();
+    }, { passive: false });
+    fpLayer.addEventListener('mousedown', (e) => {
+      fpState.dragging = true; fpState.sx = e.clientX - fpState.panX; fpState.sy = e.clientY - fpState.panY;
+    });
+    fpLayer.addEventListener('mousemove', (e) => {
+      if (!fpState.dragging) return;
+      fpState.panX = e.clientX - fpState.sx; fpState.panY = e.clientY - fpState.sy;
+      applyFpTransform();
+    });
+    fpLayer.addEventListener('mouseup', () => { fpState.dragging = false; });
+    fpLayer.addEventListener('mouseleave', () => { fpState.dragging = false; });
+  }
+
   // Calculate Route Button Trigger
   document.getElementById('btnFindRoute')?.addEventListener('click', function () {
     const startId = document.getElementById('startNodeSelect').value;
@@ -405,6 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (dirCard && dirList) {
           dirCard.classList.remove('d-none');
           algoBadge.innerText = `${data.algorithm} OPTIMAL PATH`;
+          document.getElementById('btnStartWalkthrough')?.classList.remove('d-none');
 
           dirList.innerHTML = data.instructions.map((step, idx) => `
             <div class="direction-step-card d-flex justify-content-between align-items-center">
@@ -436,34 +513,194 @@ document.addEventListener('DOMContentLoaded', function () {
     activeInstructions = [];
     document.getElementById('routeSummaryBadge')?.classList.add('d-none');
     document.getElementById('directionsCard')?.classList.add('d-none');
+    document.getElementById('btnStartWalkthrough')?.classList.add('d-none');
     renderMap();
   });
 
-  // Street View Modal Trigger
-  function openStreetViewModal(node) {
+  // ------------------------------------------------------------------
+  // PHASE 3: STREET-VIEW STYLE PHOTO VIEWER
+  // Zoom, drag-to-explore, double-click zoom, fullscreen, directional
+  // arrows to connected photographs, prev/next movement, route walkthrough.
+  // ------------------------------------------------------------------
+  let svState = {
+    node: null,
+    connections: [],
+    connIndex: 0,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    dragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    walkthrough: null // {steps: [...path_nodes], index}
+  };
+  let svModalInstance = null;
+
+  function applySvTransform() {
+    const img = document.getElementById('svModalImg');
+    if (img) {
+      img.style.transform = `translate(${svState.panX}px, ${svState.panY}px) scale(${svState.zoom})`;
+    }
+  }
+
+  function resetSvView() {
+    svState.zoom = svState.node && svState.node.is_panoramic ? 1.6 : 1;
+    svState.panX = 0;
+    svState.panY = 0;
+    applySvTransform();
+  }
+
+  function renderSvConnections() {
+    const strip = document.getElementById('svConnections');
+    if (!strip) return;
+    if (!svState.connections.length) {
+      strip.innerHTML = `<span class="small text-white-50 px-2"><i class="fa-solid fa-road me-1"></i>No mapped walkable connections from this point yet.</span>`;
+      return;
+    }
+    strip.innerHTML = svState.connections.map((c, i) => `
+      <button class="sv-arrow-btn" data-index="${i}" title="${c.direction_hint} (${c.distance_meters}m)">
+        <i class="fa-solid fa-arrow-turn-up fa-rotate-90 me-1"></i>
+        <span class="sv-arrow-label">${c.node.name.replace('[SAMPLE]', '').trim()}</span>
+        <span class="sv-arrow-dist">${c.direction_hint ? c.direction_hint.split(' ')[0] : 'Go'} • ${c.distance_meters}m</span>
+      </button>`).join('');
+
+    strip.querySelectorAll('.sv-arrow-btn').forEach(btn => {
+      btn.addEventListener('click', () => moveViewerToConnection(parseInt(btn.dataset.index)));
+    });
+  }
+
+  function moveViewerToConnection(index) {
+    const conn = svState.connections[index];
+    if (!conn) return;
+    svState.connIndex = index;
+    loadViewerNode(conn.node, conn.direction_hint ? `${conn.direction_hint} — ${conn.distance_meters}m` : null);
+  }
+
+  function loadViewerNode(node, instruction) {
+    svState.node = node;
     document.getElementById('svModalName').innerText = node.name;
     document.getElementById('svModalLocation').innerText = `${node.building} • ${node.floor}`;
     document.getElementById('svModalBadge').innerText = node.category;
-    document.getElementById('svModalDesc').innerText = node.description || "Real college photographs can be imported without code changes.";
+    document.getElementById('svModalDesc').innerText = node.description || "Photographs of buildings, corridors, staircases and rooms.";
     document.getElementById('svModalImg').src = node.photo_url || "/static/images/placeholder_node.jpg";
+    document.getElementById('svModalInstruction').innerText = instruction
+      ? instruction
+      : (svState.walkthrough
+          ? `Walkthrough stop ${svState.walkthrough.index + 1} of ${svState.walkthrough.steps.length}: ${node.name}`
+          : `You are at ${node.name}. Use the arrows below to move to a connected photograph.`);
+    const panoBadge = document.getElementById('svModalPanoBadge');
+    if (panoBadge) panoBadge.classList.toggle('d-none', !node.is_panoramic);
+    resetSvView();
 
-    const modal = new bootstrap.Modal(document.getElementById('streetViewModal'));
-    modal.show();
+    fetch(`/navigation/api/node/${node.id}/connections`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          svState.connections = data.connections;
+          svState.connIndex = 0;
+          renderSvConnections();
+        }
+      });
   }
 
-  // Global helper for step buttons and directory list
-  window.selectAndFocusNode = function (id, name, x, y, photo, building, floor, desc) {
-    document.getElementById('targetNodeSelect').value = id;
-    openStreetViewModal({
-      id: id,
-      name: name,
-      building: building,
-      floor: floor,
-      category: 'Location POI',
-      description: desc,
-      photo_url: photo
+  // Street View Modal Trigger (from map clicks)
+  function openStreetViewModal(node) {
+    svState.walkthrough = null;
+    if (!svModalInstance) {
+      svModalInstance = new bootstrap.Modal(document.getElementById('streetViewModal'));
+    }
+    svModalInstance.show();
+    loadViewerNode(node, null);
+  }
+
+  // Photo viewer interaction: dblclick zoom, drag explore, wheel zoom
+  const svViewport = document.getElementById('svViewport');
+  if (svViewport) {
+    svViewport.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.sv-control-bar') || e.target.closest('.sv-connections-strip')) return;
+      svState.zoom = Math.min(svState.zoom * 1.4, 6);
+      applySvTransform();
     });
+    svViewport.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      svState.zoom = Math.min(Math.max(svState.zoom * (e.deltaY < 0 ? 1.15 : 0.87), 0.6), 6);
+      applySvTransform();
+    }, { passive: false });
+    svViewport.addEventListener('mousedown', (e) => {
+      if (e.target.closest('button')) return;
+      svState.dragging = true;
+      svState.dragStartX = e.clientX - svState.panX;
+      svState.dragStartY = e.clientY - svState.panY;
+      svViewport.classList.add('sv-grabbing');
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!svState.dragging) return;
+      svState.panX = e.clientX - svState.dragStartX;
+      svState.panY = e.clientY - svState.dragStartY;
+      applySvTransform();
+    });
+    window.addEventListener('mouseup', () => {
+      svState.dragging = false;
+      svViewport.classList.remove('sv-grabbing');
+    });
+  }
+
+  document.getElementById('svZoomIn')?.addEventListener('click', () => { svState.zoom = Math.min(svState.zoom * 1.25, 6); applySvTransform(); });
+  document.getElementById('svZoomOut')?.addEventListener('click', () => { svState.zoom = Math.max(svState.zoom * 0.8, 0.6); applySvTransform(); });
+  document.getElementById('svResetZoom')?.addEventListener('click', resetSvView);
+  document.getElementById('svFullscreen')?.addEventListener('click', () => {
+    const modalBox = document.querySelector('#streetViewModal .modal-content');
+    if (!document.fullscreenElement) {
+      modalBox.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen();
+    }
+  });
+  document.getElementById('svPrevPhoto')?.addEventListener('click', () => {
+    if (svState.walkthrough) return walkthroughStep(-1);
+    if (svState.connections.length) moveViewerToConnection((svState.connIndex - 1 + svState.connections.length) % svState.connections.length);
+  });
+  document.getElementById('svNextPhoto')?.addEventListener('click', () => {
+    if (svState.walkthrough) return walkthroughStep(1);
+    if (svState.connections.length) moveViewerToConnection((svState.connIndex + 1) % svState.connections.length);
+  });
+
+  // Route walkthrough: photo associated with each navigation point
+  function walkthroughStep(delta) {
+    if (!svState.walkthrough) return;
+    const steps = svState.walkthrough.steps;
+    let next = svState.walkthrough.index + delta;
+    if (next < 0) next = 0;
+    if (next > steps.length - 1) next = steps.length - 1;
+    svState.walkthrough.index = next;
+    const stepNode = steps[next];
+    const instr = next < steps.length - 1 && activeInstructions[next]
+      ? `${activeInstructions[next].instruction} (${activeInstructions[next].distance_meters}m)`
+      : 'Arrival: you have reached the destination of this route.';
+    loadViewerNode(stepNode, `Stop ${next + 1}/${steps.length} — ${instr}`);
+  }
+
+  document.getElementById('btnStartWalkthrough')?.addEventListener('click', function () {
+    if (!activePathNodes.length) return;
+    svState.walkthrough = { steps: activePathNodes, index: 0 };
+    openStreetViewModal(activePathNodes[0]);
+    document.getElementById('svModalInstruction').innerText =
+      `Walkthrough started — ${activePathNodes.length} photo stops. Use ▶ to follow the route.`;
+  });
+
+  // Global helper for directory list cards (id based)
+  window.selectAndFocusNode = function (id) {
+    fetch(`/navigation/api/node/${id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) openStreetViewModal(data.node);
+      });
   };
+
+  // Directory card click delegation
+  document.querySelectorAll('.node-item').forEach(el => {
+    el.addEventListener('click', () => window.selectAndFocusNode(parseInt(el.dataset.id)));
+  });
 
   window.previewStepPOI = function (nodeName) {
     const targetNode = nodes.find(n => n.name === nodeName || n.name.includes(nodeName));

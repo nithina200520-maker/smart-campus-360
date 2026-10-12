@@ -217,4 +217,42 @@ Open **`http://localhost:5000`** in your browser (Chrome, Edge, or Firefox).
    - Automated **Teacher-First Priority** assignment on checkout.
    - High-resolution pickup verification QR code generation.
    - Order cancellation and simulated refund workflow.
-9. **Calibration Transparency**: Labeled sample data throughout the codebase, designed for seamless real-campus data import without rebuilding the application.
+9. **Calibration Transparency**: Labeled sample data throughout the codebase, designed for seamless real-campus data import without rebuilding the application. 
+
+## 🔐 Completed Phase 2 Milestones - Authentication & Role Management
+
+1. Secure login/logout with hashed passwords, hardened sessions (2-hour lifetime, HttpOnly, SameSite) and instant session termination on account deactivation.
+2. Student / Teacher / Visitor registration flows; public registration can **never** create a Main Admin.
+3. Teacher verification workflow - canteen priority applies **only to verified teachers**.
+4. Password reset with single-use, time-limited, constant-time-verified tokens.
+5. Account activation/deactivation, role changes and every privileged action recorded in the audit trail.
+6. Production lockdown of the demo role-switcher (403 + audit log outside development) and visitor masking of private contact data.
+7. pytest suite (73 tests) running against an isolated throwaway database.
+
+## 🧭 Completed Phase 3 Milestones - Smart Campus Navigation
+
+> All Phase 3 campus content is **temporary sample data** for Government Engineering College, Mosalehosahalli (Hassan), Karnataka. No real room numbers or verified routes are invented - replace them through the admin screens or CSV import.
+
+1. **Location Search** - classrooms, laboratories, HOD offices, administrative offices, library, canteen, corridors, staircases and hostels are searchable and filterable by building and floor.
+2. **Digital Campus Map & Floor Plans** - schematic campus canvas plus uploaded per-building/per-floor digital floor plans with zoom, drag and double-click exploration.
+3. **Route Calculation** - A* (heuristic) and Dijkstra executed on the node/edge graph; routes strictly follow configured walkable connections, including one-way edges.
+4. **Photo Navigation** - photograph per navigation point (buildings, corridors, staircases, rooms, landmarks) uploaded by the Main Admin.
+5. **Interactive Viewer** - double-click zoom-in, zoom-out, reset, drag-to-explore, full-screen campus map and full-screen photo viewing.
+6. **Street View-Style Experience** - calculating a route unlocks *Start Street-View Walkthrough*: the photograph tied to each navigation point with turn-by-turn instructions; directional arrows open the photograph of every walkably connected point; previous/next connected-photograph buttons; panoramic (360°) photographs are supported via the per-node panoramic flag.
+7. **Main Admin Map Manager** (`/admin/navigation/manage`, linked from the dashboard) - upload photographs, create buildings & floors, add rooms, define navigation points and connect walkable paths, manage floor plans.
+8. **Data Import** - downloadable CSV templates for nodes, connections and floor plans, with bulk import (duplicate-safe, audit-logged) at `/admin/navigation/import`.
+9. **New API** - `GET /navigation/api/node/<id>/connections` powers photo-to-photo street-view movement.
+10. **Migration** - `python migrate_phase3.py` (automatic DB backup first; existing data preserved; idempotent).
+
+### Testing Phase 3 in VS Code (Windows 11)
+
+```powershell
+python migrate_phase3.py          # one-time schema + sample data upgrade (backs up DB first)
+python run.py                     # dev server on http://127.0.0.1:5000
+python -m pytest -q               # full 73-test suite on an isolated temp database
+docker compose up -d --build web  # production image on http://127.0.0.1:8080
+```
+
+1. Open **/navigation** - search "HOD", pick route *Main Gate → Sample Classroom A-102*, choose A* or Dijkstra, then click **Start Street-View Walkthrough** and follow the photos with the directional arrows (double-click to zoom, `⛶` for full screen).
+2. Choose *Academic Block A / Ground Floor* filters and open the sample **floor plan** from the *Digital Map & Floor Plans* card.
+3. Log in as Main Admin → Dashboard → **Manage Map & Photos** - create a node with a photo upload, connect a path, upload a floor plan, download a CSV template, re-import it, and confirm every action appears in Audit Logs.

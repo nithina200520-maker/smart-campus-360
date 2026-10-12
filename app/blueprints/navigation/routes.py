@@ -1,6 +1,6 @@
 from flask import render_template, request, jsonify, flash, redirect, url_for
 from app.blueprints.navigation import navigation_bp
-from app.models import NavigationNode, NavigationEdge
+from app.models import NavigationNode, NavigationEdge, CampusFloorPlan
 from app.utils.auth_helpers import get_current_user, role_required
 from app.utils.pathfinding import find_route
 
@@ -11,13 +11,15 @@ def index():
     nodes = NavigationNode.query.order_by(NavigationNode.building.asc(), NavigationNode.name.asc()).all()
     categories = sorted(list(set(n.category for n in nodes)))
     buildings = sorted(list(set(n.building for n in nodes)))
+    floor_plans = CampusFloorPlan.query.order_by(CampusFloorPlan.building.asc()).all()
 
     return render_template(
         'navigation/index.html',
         user=user,
         nodes=nodes,
         categories=categories,
-        buildings=buildings
+        buildings=buildings,
+        floor_plans=floor_plans
     )
 
 @navigation_bp.route('/api/nodes', methods=['GET'])
@@ -59,4 +61,44 @@ def get_node_detail_api(node_id):
     return jsonify({
         "success": True,
         "node": node.to_dict()
+    })
+
+@navigation_bp.route('/api/node/<int:node_id>/connections', methods=['GET'])
+def get_node_connections_api(node_id):
+    """
+    Phase 3: Street-view graph walker.
+    Returns every node walkable-connected to this node (following configured
+    bidirectional/directed edges) with direction hints, distance and photograph
+    references so the viewer can move photo-to-photo like Google Street View.
+    """
+    node = NavigationNode.query.get_or_404(node_id)
+    edges = NavigationEdge.query.filter(
+        ((NavigationEdge.source_node_id == node_id) & NavigationEdge.is_bidirectional) |
+        ((NavigationEdge.target_node_id == node_id) & NavigationEdge.is_bidirectional) |
+        ((NavigationEdge.source_node_id == node_id) & ~NavigationEdge.is_bidirectional)
+    ).all()
+
+    connections = []
+    seen = set()
+    for edge in edges:
+        other_id = edge.target_node_id if edge.source_node_id == node_id else edge.source_node_id
+        if other_id == node.id or other_id in seen:
+            continue
+        other = NavigationNode.query.get(other_id)
+        if not other:
+            continue
+        seen.add(other.id)
+        connections.append({
+            "node": other.to_dict(),
+            "edge_id": edge.id,
+            "distance_meters": edge.distance_meters,
+            "direction_hint": edge.direction_hint or "Continue towards",
+            "traversable_back": bool(edge.is_bidirectional)
+        })
+
+    return jsonify({
+        "success": True,
+        "source_node": node.to_dict(),
+        "connections": connections,
+        "connection_count": len(connections)
     })

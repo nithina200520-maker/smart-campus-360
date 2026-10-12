@@ -106,6 +106,7 @@ class NavigationNode(db.Model):
     x_coord = db.Column(db.Integer, nullable=False, default=0) # 2D map canvas coordinate X
     y_coord = db.Column(db.Integer, nullable=False, default=0) # 2D map canvas coordinate Y
     photo_url = db.Column(db.String(255), nullable=True)
+    is_panoramic = db.Column(db.Boolean, default=False, nullable=False)
     is_accessible = db.Column(db.Boolean, default=True, nullable=False)
     is_sample_data = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -127,6 +128,7 @@ class NavigationNode(db.Model):
             "x_coord": self.x_coord,
             "y_coord": self.y_coord,
             "photo_url": self.photo_url,
+            "is_panoramic": self.is_panoramic,
             "is_accessible": self.is_accessible,
             "is_sample_data": self.is_sample_data
         }
@@ -361,3 +363,29 @@ class AuditLog(db.Model):
             "ip_address": self.ip_address,
             "created_at": self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None
         }
+
+
+class CampusFloorPlan(db.Model):
+    """Uploaded digital floor plan images per building/floor (Phase 3 navigation)."""
+    __tablename__ = 'campus_floor_plans'
+
+    id = db.Column(db.Integer, primary_key=True)
+    building = db.Column(db.String(100), nullable=False, index=True)
+    floor = db.Column(db.String(50), nullable=False, default='Ground Floor')
+    title = db.Column(db.String(150), nullable=False)
+    image_url = db.Column(db.String(255), nullable=True)
+    is_sample_data = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "building": self.building,
+            "floor": self.floor,
+            "title": self.title,
+            "image_url": self.image_url,
+            "is_sample_data": self.is_sample_data
+        }
+
+    def __repr__(self):
+        return f"<CampusFloorPlan {self.building} - {self.floor}>"

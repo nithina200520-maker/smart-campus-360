@@ -47,11 +47,12 @@ CREATE TABLE IF NOT EXISTS navigation_nodes (
     name VARCHAR(150) NOT NULL COMMENT 'Display name of the location',
     building VARCHAR(100) NOT NULL COMMENT 'Building / Block name',
     floor VARCHAR(50) NOT NULL DEFAULT 'Ground Floor' COMMENT 'Ground Floor, 1st Floor, Campus Grounds, etc.',
-    category ENUM('Classroom', 'Laboratory', 'HOD Room', 'Office', 'Library', 'Canteen', 'Restroom', 'Gate', 'Sports Ground', 'Auditorium', 'Corridor') NOT NULL DEFAULT 'Classroom',
+    category ENUM('Classroom', 'Laboratory', 'HOD Room', 'HOD Office', 'Office', 'Library', 'Canteen', 'Restroom', 'Gate', 'Sports Ground', 'Auditorium', 'Corridor', 'Staircase', 'Hostel', 'Workshop', 'Landmark') NOT NULL DEFAULT 'Classroom',
     description TEXT NULL,
     x_coord INT NOT NULL DEFAULT 0 COMMENT 'X coordinate on 2D floorplan/canvas',
     y_coord INT NOT NULL DEFAULT 0 COMMENT 'Y coordinate on 2D floorplan/canvas',
     photo_url VARCHAR(255) NULL COMMENT 'Relative URL to real/sample 360 or POV photograph',
+    is_panoramic BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Marks 360-degree panoramic photograph (Phase 3)',
     is_accessible BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Wheelchair / Universal accessibility',
     is_sample_data BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Explicit marker for sample/unverified data',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -74,6 +75,17 @@ CREATE TABLE IF NOT EXISTS navigation_edges (
     FOREIGN KEY (target_node_id) REFERENCES navigation_nodes(id) ON DELETE CASCADE,
     INDEX idx_edge_source (source_node_id),
     INDEX idx_edge_target (target_node_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS campus_floor_plans (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    building VARCHAR(100) NOT NULL COMMENT 'Building / Block name',
+    floor VARCHAR(50) NOT NULL DEFAULT 'Ground Floor',
+    title VARCHAR(150) NOT NULL COMMENT 'Display title of the digital floor plan',
+    image_url VARCHAR(255) NULL COMMENT 'Uploaded floor plan image reference',
+    is_sample_data BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_plan_building (building)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------------------------

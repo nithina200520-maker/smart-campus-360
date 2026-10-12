@@ -167,6 +167,145 @@ main {
   transform: scale(1.05);
 }
 
+/* ---------- PHASE 3: Street-View Photo Viewer & Floor Plans ---------- */
+.streetview-img {
+  transition: transform 0.12s ease-out;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.streetview-viewport {
+  cursor: grab;
+  user-select: none;
+}
+
+.streetview-viewport.sv-grabbing {
+  cursor: grabbing;
+}
+
+.sv-control-bar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 15;
+}
+
+.sv-control-bar .map-ctrl-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 0.8rem;
+}
+
+.sv-connections-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  padding: 10px 12px;
+  overflow-x: auto;
+  background: linear-gradient(to top, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.0));
+  z-index: 15;
+}
+
+.sv-arrow-btn {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 150px;
+  max-width: 210px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: rgba(30, 41, 59, 0.85);
+  color: #f8fafc;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sv-arrow-btn:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  transform: translateY(-2px);
+}
+
+.sv-arrow-label {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.sv-arrow-dist {
+  color: rgba(226, 232, 240, 0.75);
+  font-size: 0.68rem;
+}
+
+#streetViewModal:fullscreen {
+  background: #0f172a;
+  padding: 0;
+}
+
+#streetViewModal:fullscreen .modal-content {
+  height: 100vh;
+  border-radius: 0;
+}
+
+#streetViewModal:fullscreen .streetview-viewport {
+  height: calc(100vh - 150px);
+}
+
+.map-canvas-container:fullscreen {
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.floorplan-layer,
+#floorPlanLayer {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.94);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  border-radius: 12px;
+}
+
+.floorplan-head {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  color: #f8fafc;
+  font-weight: 700;
+  font-size: 0.9rem;
+  z-index: 5;
+}
+
+.floorplan-img {
+  max-width: 92%;
+  max-height: 78%;
+  transition: transform 0.12s ease-out;
+  transform-origin: center center;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
 /* Street View Photo Preview Modal */
 .streetview-viewport {
   position: relative;

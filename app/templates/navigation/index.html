@@ -39,6 +39,34 @@
     
     <!-- Left Navigation Controls & Search Sidebar -->
     <div class="col-lg-4 col-xl-3">
+      <!-- Digital Map / Floor Plan Selector -->
+      <div class="card campus-card border-0 shadow-sm p-3 mb-3">
+        <h6 class="fw-bold text-dark mb-2"><i class="fa-solid fa-layer-group text-warning me-2"></i>Digital Map &amp; Floor Plans</h6>
+        <div class="row g-2">
+          <div class="col-6">
+            <select id="filterBuilding" class="form-select form-select-sm">
+              <option value="">All Buildings</option>
+              {% for b in buildings %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-6">
+            <select id="filterFloor" class="form-select form-select-sm">
+              <option value="">All Floors</option>
+              {% for f in ['Ground Floor','1st Floor','2nd Floor','3rd Floor','Campus Grounds'] %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        {% if floor_plans %}
+        <select id="floorPlanSelect" class="form-select form-select-sm mt-2 d-none">
+          <option value="">-- Open Uploaded Floor Plan --</option>
+          {% for p in floor_plans %}<option value="{{ p.image_url }}" data-title="{{ p.building }} • {{ p.floor }}">{{ p.title }} ({{ p.building }} - {{ p.floor }})</option>{% endfor %}
+        </select>
+        {% endif %}
+        <button id="btnBackToCampusMap" class="btn btn-sm btn-outline-secondary rounded-pill w-100 mt-2 d-none">
+          <i class="fa-solid fa-map me-1"></i> Back to Full Campus Map
+        </button>
+      </div>
+
       <div class="card campus-card border-0 shadow-sm p-3 mb-3">
         <h6 class="fw-bold text-dark mb-3"><i class="fa-solid fa-route text-primary me-2"></i>Route Planning Engine</h6>
 
@@ -103,7 +131,7 @@
                data-name="{{ n.name }}" 
                data-category="{{ n.category }}"
                data-building="{{ n.building }}"
-               onclick="selectAndFocusNode({{ n.id }}, '{{ n.name }}', {{ n.x_coord }}, {{ n.y_coord }}, '{{ n.photo_url }}', '{{ n.building }}', '{{ n.floor }}', '{{ n.description }}')">
+               data-floor="{{ n.floor }}">
             <div class="d-flex justify-content-between align-items-start">
               <span class="fw-bold small text-dark">{{ n.name }}</span>
               <span class="badge bg-secondary" style="font-size: 0.65rem;">{{ n.category }}</span>
@@ -135,6 +163,13 @@
 
         <div class="map-canvas-container">
           <canvas id="campusMapCanvas" width="1000" height="650"></canvas>
+
+          <!-- Floor Plan Layer (shown when a plan is selected) -->
+          <div id="floorPlanLayer" class="d-none">
+            <div class="floorplan-head"><i class="fa-solid fa-layer-group me-1"></i><span id="floorPlanTitle">Floor Plan</span></div>
+            <img id="floorPlanImg" src="" alt="Campus floor plan" class="floorplan-img">
+            <div class="small text-white-50 text-center mt-1">Drag to explore • Scroll to zoom • Double-click to zoom in</div>
+          </div>
           
           <!-- Zoom & Canvas Controls Overlay -->
           <div class="map-controls-overlay">
@@ -146,6 +181,9 @@
             </button>
             <button class="map-ctrl-btn" id="btnResetView" title="Reset View">
               <i class="fa-solid fa-rotate"></i>
+            </button>
+            <button class="map-ctrl-btn" id="btnFullscreen" title="Full Screen">
+              <i class="fa-solid fa-expand"></i>
             </button>
           </div>
         </div>
@@ -160,6 +198,9 @@
         <div id="directionsList">
           <!-- Populated by JavaScript upon route calculation -->
         </div>
+        <button id="btnStartWalkthrough" class="btn btn-dark rounded-pill w-100 mt-2 fw-bold d-none">
+          <i class="fa-solid fa-vr-cardboard me-1"></i> Start Street-View Walkthrough (Photo Guide)
+        </button>
       </div>
 
     </div>
@@ -178,24 +219,47 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body p-0">
-        <div class="streetview-viewport">
+        <div class="streetview-viewport" id="svViewport">
           <img id="svModalImg" src="/static/images/placeholder_node.jpg" alt="Waypoint POV Photo" class="streetview-img">
           
           <div class="streetview-overlay-hud">
             <div class="d-flex justify-content-between align-items-end">
               <div>
                 <span class="badge bg-warning text-dark px-2 py-1 mb-1" id="svModalBadge">Laboratory</span>
+                <span class="badge bg-info text-dark px-2 py-1 mb-1 d-none" id="svModalPanoBadge"><i class="fa-solid fa-panorama me-1"></i>360°</span>
                 <h5 class="fw-bold mb-0 text-white" id="svModalName">Computer Science Department</h5>
                 <p class="small text-light mb-0" id="svModalLocation">Academic Block A • 1st Floor</p>
               </div>
               <span class="badge-sample-data">Sample Photography</span>
             </div>
           </div>
+
+          <!-- Photo Viewer Controls: zoom / reset / fullscreen -->
+          <div class="sv-control-bar">
+            <button class="map-ctrl-btn" id="svZoomIn" title="Zoom In"><i class="fa-solid fa-plus"></i></button>
+            <button class="map-ctrl-btn" id="svZoomOut" title="Zoom Out"><i class="fa-solid fa-minus"></i></button>
+            <button class="map-ctrl-btn" id="svResetZoom" title="Reset Zoom"><i class="fa-solid fa-rotate"></i></button>
+            <button class="map-ctrl-btn" id="svFullscreen" title="Full Screen"><i class="fa-solid fa-expand"></i></button>
+          </div>
+
+          <!-- Directional arrows to connected photographs (street-view movement) -->
+          <div class="sv-connections-strip" id="svConnections">
+            <span class="small text-white-50 px-2">Loading connected points…</span>
+          </div>
         </div>
       </div>
-      <div class="modal-footer bg-light py-2 px-3 d-flex justify-content-between">
-        <p class="small text-muted mb-0" id="svModalDesc">Real college photographs can be imported directly into this waypoint without code changes.</p>
-        <button type="button" class="btn btn-sm btn-secondary rounded-pill" data-bs-dismiss="modal">Close View</button>
+      <div class="modal-footer bg-light py-2 px-3 d-flex justify-content-between align-items-center">
+        <div class="flex-grow-1">
+          <div class="small fw-bold text-primary mb-0" id="svInstruction">Navigation instruction appears here.</div>
+          <p class="small text-muted mb-0" id="svModalDesc">Photographs of buildings, corridors, staircases and rooms.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <div class="btn-group btn-group-sm" role="group" aria-label="Previous / next connected photograph">
+            <button type="button" class="btn btn-outline-primary rounded-pill" id="svPrevPhoto" title="Previous connected photograph"><i class="fa-solid fa-chevron-left"></i></button>
+            <button type="button" class="btn btn-outline-primary" id="svNextPhoto" title="Next connected photograph"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+          <button type="button" class="btn btn-sm btn-secondary rounded-pill" data-bs-dismiss="modal">Close</button>
+        </div>
       </div>
     </div>
   </div>
