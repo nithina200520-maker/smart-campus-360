@@ -88,8 +88,8 @@ html[data-theme="dark"] .sc-flake { background: radial-gradient(circle at 50% 50
 @keyframes sc-twinkle { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.95; } }
 
 /* ============================== PURPLE GALAXY (behind the glass) ============================== */
-.sc-galaxy { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.sc-galaxy::before, .sc-galaxy::after { content: ""; position: absolute; top: 50%; left: 50%; width: 160vmax; height: 160vmax; border-radius: 50%; }
+.sc-galaxy { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; perspective: 1200px; transform-style: preserve-3d; }
+.sc-galaxy::before, .sc-galaxy::after { content: ""; position: absolute; top: 50%; left: 50%; width: 160vmax; height: 160vmax; border-radius: 50%; transform-style: preserve-3d; will-change: transform; }
 .sc-galaxy::before {
   background: conic-gradient(from 0deg,
     rgba(168,85,247,0) 0deg, rgba(216,180,254,0.45) 60deg, rgba(236,72,153,0.30) 130deg,
@@ -97,7 +97,7 @@ html[data-theme="dark"] .sc-flake { background: radial-gradient(circle at 50% 50
   filter: blur(48px) saturate(1.25);
   -webkit-mask: radial-gradient(circle at 50% 50%, #000 0, #000 34%, transparent 62%);
   mask: radial-gradient(circle at 50% 50%, #000 0, #000 34%, transparent 62%);
-  animation: sc-galaxy-spin 46s linear infinite;
+  animation: sc-galaxy-spin3d 40s linear infinite;
   opacity: 0.9;
 }
 .sc-galaxy::after {
@@ -106,11 +106,11 @@ html[data-theme="dark"] .sc-flake { background: radial-gradient(circle at 50% 50
     radial-gradient(34vmax 34vmax at 60% 55%, rgba(167,139,250,0.38), transparent 60%),
     radial-gradient(26vmax 26vmax at 50% 50%, rgba(255,255,255,0.6), rgba(233,213,255,0.28) 42%, transparent 70%);
   filter: blur(30px);
-  animation: sc-galaxy-spin-rev 64s linear infinite;
+  animation: sc-galaxy-spin3d-rev 58s linear infinite;
   opacity: 0.85;
 }
-@keyframes sc-galaxy-spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
-@keyframes sc-galaxy-spin-rev { 0% { transform: translate(-50%, -50%) rotate(360deg); } 100% { transform: translate(-50%, -50%) rotate(0deg); } }
+@keyframes sc-galaxy-spin3d { 0% { transform: translate(-50%, -50%) rotateX(58deg) rotateZ(0deg); } 50% { transform: translate(-50%, -50%) rotateX(74deg) rotateZ(180deg); } 100% { transform: translate(-50%, -50%) rotateX(58deg) rotateZ(360deg); } }
+@keyframes sc-galaxy-spin3d-rev { 0% { transform: translate(-50%, -50%) rotateX(66deg) rotateZ(360deg); } 50% { transform: translate(-50%, -50%) rotateX(50deg) rotateZ(180deg); } 100% { transform: translate(-50%, -50%) rotateX(66deg) rotateZ(0deg); } }
 
 /* ============================== ENHANCED ANIMATIONS ============================== */
 .sc-banner { isolation: isolate; }
