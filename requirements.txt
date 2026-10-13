@@ -19,3 +19,7 @@ gunicorn>=21.2.0
 
 # Phase 2: automated test suite (development)
 pytest>=8.0.0
+
+# Phase 7: payment gateway SDK (only imported when PAYMENT_PROVIDER=stripe;
+# the integration is test-mode enforced - sandbox needs no credentials)
+stripe>=9.0.0

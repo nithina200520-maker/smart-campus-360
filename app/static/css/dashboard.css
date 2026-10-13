@@ -7,9 +7,9 @@
 
 :root,
 html[data-theme="light"] {
-  --sc-page-1: #eaf1ff;
-  --sc-page-2: #dfeaff;
-  --sc-page-3: #f5f9ff;
+  --sc-page-1: #dce8ff;
+  --sc-page-2: #ccdffc;
+  --sc-page-3: #eaf3ff;
   --sc-primary: #2563eb;
   --sc-primary-2: #3b82f6;
   --sc-sky: #38bdf8;
@@ -19,30 +19,37 @@ html[data-theme="light"] {
   --sc-amber: #f59e0b;
   --sc-rose: #ef4444;
   --sc-ink: #0f2350;
-  --sc-ink-soft: #5f7096;
+  --sc-ink-soft: #56678e;
   --sc-glass: rgba(255, 255, 255, 0.72);
   --sc-glass-2: rgba(255, 255, 255, 0.5);
-  --sc-glass-brd: rgba(255, 255, 255, 0.85);
+  --sc-glass-brd: rgba(190, 218, 255, 0.95);
   --sc-line: rgba(37, 99, 235, 0.10);
   --sc-shadow: 0 22px 48px -22px rgba(30, 64, 175, 0.35);
   --sc-shadow-soft: 0 12px 28px -16px rgba(30, 64, 175, 0.28);
   --sc-radius: 20px;
+  /* Phase 7: neon ray palette (rgb triplets for rgba() composition) */
+  --sc-ray-a: 14, 165, 233;   /* cyan head   */
+  --sc-ray-b: 37, 99, 235;    /* electric blue trail */
+  --sc-ray-glow: 0.65;        /* outer bloom strength */
 }
 
 html[data-theme="dark"] {
-  --sc-page-1: #0a1120;
-  --sc-page-2: #0d1830;
-  --sc-page-3: #070d18;
+  --sc-page-1: #060c1c;
+  --sc-page-2: #0a1530;
+  --sc-page-3: #04080f;
   --sc-primary: #60a5fa;
   --sc-primary-2: #3b82f6;
   --sc-ink: #eaf1ff;
   --sc-ink-soft: #9fb0d4;
-  --sc-glass: rgba(20, 33, 60, 0.72);
-  --sc-glass-2: rgba(20, 33, 60, 0.5);
-  --sc-glass-brd: rgba(120, 150, 210, 0.22);
+  --sc-glass: rgba(16, 28, 54, 0.72);
+  --sc-glass-2: rgba(16, 28, 54, 0.5);
+  --sc-glass-brd: rgba(96, 140, 210, 0.32);
   --sc-line: rgba(120, 150, 210, 0.16);
   --sc-shadow: 0 22px 48px -22px rgba(0, 0, 0, 0.7);
   --sc-shadow-soft: 0 12px 28px -16px rgba(0, 0, 0, 0.6);
+  --sc-ray-a: 34, 211, 238;
+  --sc-ray-b: 96, 165, 250;
+  --sc-ray-glow: 0.85;
 }
 
 * { box-sizing: border-box; }
@@ -375,6 +382,104 @@ html[data-theme="dark"] .sc-banner-veil { background: linear-gradient(100deg, rg
 .sc-scrim { position: fixed; inset: 0; background: rgba(8,15,30,0.45); backdrop-filter: blur(2px); opacity: 0; visibility: hidden; transition: 0.3s ease; z-index: 39; }
 .sc-scrim.show { opacity: 1; visibility: visible; }
 
+/* ============================== NEON ORBITING BORDER RAYS ==============================
+   Reference-matched: bright classic white-blue light heads that travel continuously
+   along their own axis around each panel border AND around a full-page outer frame.
+   Purely cosmetic - masked rings, pointer-events: none, zero layout impact. */
+@property --sc-ray { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@property --sc-frame-ray { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+.sc-fcard { position: relative; }
+
+/* Neon TUBE borders - the whole outline glows like a lit tube (ref photo 2) */
+.sc-panel, .sc-stat, .sc-fcard, .sc-topbar {
+  border: 2px solid rgba(var(--sc-ray-a), 0.85) !important;
+  box-shadow:
+    var(--sc-shadow-soft),
+    0 0 5px rgba(var(--sc-ray-a), 0.85),
+    0 0 16px rgba(var(--sc-ray-a), calc(var(--sc-ray-glow) * 0.8)),
+    0 0 38px rgba(var(--sc-ray-b), calc(var(--sc-ray-glow) * 0.5)),
+    inset 0 0 10px rgba(var(--sc-ray-a), 0.28),
+    inset 0 0 26px rgba(var(--sc-ray-b), 0.16);
+}
+.sc-banner {
+  border: 2px solid rgba(var(--sc-ray-a), 0.9) !important;
+  box-shadow:
+    var(--sc-shadow),
+    0 0 6px rgba(var(--sc-ray-a), 0.9),
+    0 0 20px rgba(var(--sc-ray-a), calc(var(--sc-ray-glow) * 0.8)),
+    0 0 48px rgba(var(--sc-ray-b), calc(var(--sc-ray-glow) * 0.5));
+}
+
+/* Shining sparkles + light heads traveling along the tube's own axis (ref photo 3) */
+.sc-panel::before, .sc-stat::before, .sc-fcard::before, .sc-topbar::before, .sc-banner::before {
+  content: ""; position: absolute; inset: -2px; z-index: 4; border-radius: inherit;
+  padding: 2.5px; pointer-events: none;
+  background:
+    conic-gradient(from var(--sc-ray) 0deg,
+      rgba(255, 255, 255, 0)    0deg,   rgba(255, 255, 255, 0)    80deg,
+      rgba(255, 255, 255, 0.95) 96deg,  rgba(255, 255, 255, 0.95) 108deg,
+      rgba(255, 255, 255, 0)    124deg, rgba(255, 255, 255, 0)    258deg,
+      rgba(255, 255, 255, 0.95) 274deg, rgba(255, 255, 255, 0.95) 286deg,
+      rgba(255, 255, 255, 0)    302deg, rgba(255, 255, 255, 0)    360deg),
+    repeating-conic-gradient(from var(--sc-ray) 0deg,
+      rgba(255, 255, 255, 0.7) 0deg 1.4deg, rgba(255, 255, 255, 0) 1.4deg 9deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  filter: drop-shadow(0 0 6px rgba(var(--sc-ray-a), 0.95))
+          drop-shadow(0 0 16px rgba(var(--sc-ray-b), 0.6));
+  animation: sc-ray-spin var(--sc-ray-dur, 7s) linear infinite,
+             sc-ray-breathe var(--sc-ray-br, 9s) ease-in-out infinite;
+  will-change: --sc-ray;
+}
+@keyframes sc-ray-spin { to { --sc-ray: 360deg; } }
+@keyframes sc-ray-breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+/* Per-panel tempo + phase variety so rays never look mechanical */
+.sc-topbar::before { --sc-ray-dur: 10s; --sc-ray-br: 13s; }
+.sc-banner::before { --sc-ray-dur: 8.5s; --sc-ray-br: 11s; }
+.sc-fcard::before  { --sc-ray-dur: 7.5s; }
+.sc-stat::before   { --sc-ray-dur: 6s; }
+.sc-stats .sc-stat:nth-child(2)::before { animation-delay: -1.5s, -2.2s; }
+.sc-stats .sc-stat:nth-child(3)::before { animation-delay: -3s, -4.4s; }
+.sc-stats .sc-stat:nth-child(4)::before { animation-delay: -4.5s, -6.6s; }
+.sc-two .sc-panel:nth-child(2)::before,
+.sc-col-side .sc-panel:nth-child(2)::before { animation-delay: -2.4s, -3.1s; }
+.sc-fcard:nth-child(2)::before { animation-delay: -2.5s, -1.5s; }
+.sc-fcard:nth-child(3)::before { animation-delay: -5s, -4s; }
+
+/* Full-page outer neon tube frame with traveling shine sparkles */
+.sc360-body::after {
+  content: ""; position: fixed; inset: 8px; z-index: 60; pointer-events: none;
+  border-radius: 26px; padding: 3px;
+  background:
+    conic-gradient(from var(--sc-frame-ray) 0deg,
+      rgba(255, 255, 255, 0)    0deg,   rgba(255, 255, 255, 0)    64deg,
+      rgba(255, 255, 255, 0.95) 82deg,  rgba(255, 255, 255, 0.95) 96deg,
+      rgba(255, 255, 255, 0)    114deg, rgba(255, 255, 255, 0)    244deg,
+      rgba(255, 255, 255, 0.95) 262deg, rgba(255, 255, 255, 0.95) 276deg,
+      rgba(255, 255, 255, 0)    294deg, rgba(255, 255, 255, 0)    360deg),
+    repeating-conic-gradient(from var(--sc-frame-ray) 0deg,
+      rgba(255, 255, 255, 0.65) 0deg 1.2deg, rgba(255, 255, 255, 0) 1.2deg 7deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  border: 2px solid rgba(var(--sc-ray-a), 0.85);
+  box-shadow:
+    0 0 6px rgba(var(--sc-ray-a), 0.9),
+    0 0 20px rgba(var(--sc-ray-a), calc(var(--sc-ray-glow) * 0.7)),
+    0 0 52px rgba(var(--sc-ray-b), calc(var(--sc-ray-glow) * 0.45)),
+    inset 0 0 6px rgba(var(--sc-ray-a), 0.7),
+    inset 0 0 30px rgba(var(--sc-ray-b), calc(var(--sc-ray-glow) * 0.3));
+  filter: drop-shadow(0 0 8px rgba(var(--sc-ray-a), 0.9));
+  animation: sc-frame-spin 13s linear infinite;
+  will-change: --sc-frame-ray;
+}
+@keyframes sc-frame-spin { to { --sc-frame-ray: 360deg; } }
+
 /* ============================== RESPONSIVE ============================== */
 @media (max-width: 1280px) {
   .sc-content { grid-template-columns: 1fr 1fr; }
@@ -417,4 +522,11 @@ html[data-theme="dark"] .sc-banner-veil { background: linear-gradient(100deg, rg
   .sc-banner-media, .sc-banner::after, .sc-fcard-media::after, .sc-fcard-badge, .sc-dot { animation: none !important; }
   .sc-fcard { transform: none !important; }
   .sc-snow, .sc-galaxy { display: none; }
+  /* Neon rays: no travel, no breathing - calm static outline only */
+  .sc-panel::before, .sc-stat::before, .sc-fcard::before, .sc-topbar::before, .sc-banner::before {
+    animation: none !important;
+    opacity: 0.45;
+    filter: none;
+  }
+  .sc360-body::after { animation: none !important; filter: none; opacity: 0.6; }
 }

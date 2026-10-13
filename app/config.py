@@ -95,6 +95,29 @@ class Config:
     # Average kitchen minutes added per order queued ahead in the same slot
     CANTEEN_PREP_MIN_PER_ORDER = int(os.getenv("CANTEEN_PREP_MIN_PER_ORDER", 4))
 
+    # --- Phase 7: Payment & Refund Processing ---
+    # 'sandbox' = built-in deterministic gateway (default; no credentials needed,
+    # used by development + the automated test suite). 'stripe' = official Stripe
+    # SDK, TEST-MODE ONLY: startup refuses any secret key that is not sk_test_*.
+    PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "sandbox")
+    PAYMENT_CURRENCY = os.getenv("PAYMENT_CURRENCY", "inr")
+    # Credentials come from the environment ONLY and are never rendered in pages.
+    STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+    # Shared secret used to sign/verify webhook payloads (sandbox HMAC and the
+    # Stripe signing secret both live here).
+    PAYMENT_WEBHOOK_SECRET = os.getenv("PAYMENT_WEBHOOK_SECRET", "sc360-sandbox-webhook-secret-change-me")
+    PAYMENT_WEBHOOK_TOLERANCE_SECS = int(os.getenv("PAYMENT_WEBHOOK_TOLERANCE_SECS", 300))
+    # Sandbox outcome switches (documented test hooks; ignored by the Stripe path):
+    # 'succeeded' (default, instant capture) | 'failed' | 'processing' (async,
+    # the order only confirms once a signed webhook reports success).
+    PAYMENT_SANDBOX_PAYMENT_OUTCOME = os.getenv("PAYMENT_SANDBOX_PAYMENT_OUTCOME", "succeeded")
+    # 'succeeded' (default) | 'failed' | 'processing' (delayed; finalised by a
+    # later webhook or an admin re-sync).
+    PAYMENT_SANDBOX_REFUND_OUTCOME = os.getenv("PAYMENT_SANDBOX_REFUND_OUTCOME", "succeeded")
+    # Auto-refund a captured payment when the order later proves unfulfillable.
+    PAYMENT_AUTO_REFUND_ON_UNFULFILLABLE = os.getenv("PAYMENT_AUTO_REFUND_ON_UNFULFILLABLE", "True").lower() in ("true", "1", "t")
+
 class DevelopmentConfig(Config):
     DEBUG = True
     ALLOW_QUICK_SWITCH = os.getenv("ENABLE_QUICK_SWITCH", "True").lower() in ("true", "1", "t")

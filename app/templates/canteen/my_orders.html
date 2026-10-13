@@ -53,7 +53,11 @@
                   <span class="badge bg-light text-muted border">Standard</span>
                 {% endif %}
               </td>
-              <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}</td>
+              <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}
+                <div class="small mt-1">
+                  <span class="badge {% if o.payment_status == 'paid' %}bg-success{% elif o.payment_status == 'refunded' %}bg-danger{% elif o.payment_status == 'partially_refunded' %}bg-warning text-dark{% else %}bg-light text-muted border{% endif %}">{{ o.payment_status|upper }}</span>
+                </div>
+              </td>
               <td>
                 <span class="badge {% if o.order_status == 'collected' %}bg-success{% elif o.order_status == 'ready' %}bg-info text-dark{% elif o.order_status == 'preparing' %}bg-warning text-dark{% elif o.order_status == 'confirmed' %}bg-primary{% elif o.order_status in ['cancelled', 'refunded'] %}bg-danger{% elif 'refund' in o.order_status %}bg-secondary{% else %}bg-secondary{% endif %} text-uppercase">
                   {{ o.status_label }}

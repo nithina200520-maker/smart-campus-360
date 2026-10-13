@@ -11,6 +11,8 @@ from app.database import db
 from app.utils.auth_helpers import login_required, get_current_user
 from app.utils.qr_generator import generate_order_qr
 from app.utils import canteen_booking as booking
+from app.utils.payment_providers import get_provider, WebhookVerificationError
+from app.utils import payment_service
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 
@@ -265,7 +267,7 @@ def checkout():
         pickup_time=pickup_time,
         slot_id=slot.id if slot else None,
         order_status='pending',
-        payment_status='paid' if payment_method != 'cash_at_counter' else 'pending',
+        payment_status='pending',
         payment_method=payment_method,
     )
     for item, qty, subtotal in lines:
@@ -275,12 +277,44 @@ def checkout():
         ))
     db.session.add(new_order)
 
-    # Deduct stock now that every line passed validation
+    # Phase 7: deducting stock now RESERVES it for this order; a failed or
+    # abandoned payment releases the reservation again.
     for item, qty, _ in lines:
         item.stock_quantity -= qty
+    db.session.flush()
+
+    # ---- Phase 7: backend-verified payment BEFORE anything is confirmed ------
+    # Cash-at-counter keeps the old no-gateway path; online methods create a
+    # gateway intent whose status is verified on the backend only.
+    pay_captured = payment_method == 'cash_at_counter'
+    payment = None
+    if payment_method != 'cash_at_counter':
+        payment, pay_result = payment_service.start_payment(new_order)
+        if pay_result.status == 'failed':
+            # Nothing was charged: release stock and cancel visibly.
+            payment_service.release_reservation(new_order)
+            new_order.order_status = 'cancelled'
+            new_order.refund_reason = f"Payment failed: {pay_result.failure_reason or 'declined'}"
+            db.session.commit()
+            Notification.notify(
+                user.id, "Payment failed",
+                f"Payment for order {order_code} failed: "
+                f"{pay_result.failure_reason or 'the gateway declined it'}. "
+                "Nothing was charged.",
+                category='canteen',
+                link_url=url_for('canteen.my_orders'),
+                dedup_key=f"canteen:{new_order.id}:payment_failed",
+            )
+            db.session.commit()
+            flash(f"Payment failed ({pay_result.failure_reason or 'the gateway declined it'}). "
+                  "Nothing was charged and your cart is intact - please try again.", "danger")
+            return redirect(url_for('canteen.cart_view'))
+        pay_captured = pay_result.status == 'succeeded'
 
     # ---- Teacher-first-aware confirmation -------------------------------------
-    if cfg['CANTEEN_AUTO_CONFIRM']:
+    # Online orders confirm only once payment is captured; cash keeps the
+    # legacy auto-confirm (settled at the counter).
+    if cfg['CANTEEN_AUTO_CONFIRM'] and (pay_captured or payment_method == 'cash_at_counter'):
         _confirm_order(new_order, cfg)
 
     db.session.commit()
@@ -292,11 +326,23 @@ def checkout():
             slot, booking.max_prep_minutes(new_order), ahead, cfg)
         db.session.commit()
 
-    # Generate QR Code image on disk (token exists once confirmed)
+    # Generate QR Code image on disk (token exists once confirmed).
+    # Phase 7: if the money is captured but finalisation fails, the order
+    # reverts to pending and the mismatch is recorded for admin action.
+    mismatch_error = None
     if new_order.order_status == 'confirmed':
-        qr_path = generate_order_qr(new_order, save_to_disk=True)
-        new_order.qr_code_path = qr_path
-        db.session.commit()
+        try:
+            qr_path = generate_order_qr(new_order, save_to_disk=True)
+            new_order.qr_code_path = qr_path
+            db.session.commit()
+        except Exception as exc:  # noqa: BLE001 - money safety beats the QR
+            db.session.rollback()
+            mismatch_error = str(exc)
+            if payment is not None and payment.status == 'succeeded':
+                new_order.order_status = 'pending'
+                new_order.confirmed_at = None
+                db.session.commit()
+                payment_service.flag_confirm_mismatch(payment, exc)
 
     # Clear user session cart
     session.pop('canteen_cart', None)
@@ -306,7 +352,9 @@ def checkout():
         module='CANTEEN',
         user_id=user.id,
         details=f"Order {order_code} placed for ₹{total_amount:.2f}. "
-                f"Priority: {is_priority}. Slot: {slot.name if slot else 'legacy'}.",
+                f"Priority: {is_priority}. Slot: {slot.name if slot else 'legacy'}. "
+                + (f"Payment: {payment.provider}/{payment.status}"
+                   f" (intent {payment.intent_id})." if payment else "Payment: cash at counter."),
         ip_address=request.remote_addr,
     )
 
@@ -322,7 +370,14 @@ def checkout():
         )
         db.session.commit()
 
-    if is_priority:
+    if mismatch_error:
+        flash("Your payment was captured but the order could not be confirmed this "
+              "time. Your money is safe - the canteen team has been alerted and will "
+              "confirm or refund your order shortly.", "warning")
+    elif payment is not None and payment.status == 'processing':
+        flash("Your order is placed and the payment is still being completed by the "
+              "gateway. It will confirm automatically once the payment is verified.", "info")
+    elif is_priority:
         flash("Order placed successfully with TEACHER-FIRST PRIORITY allocation!", "success")
     elif user.role == 'teacher' and not user.is_verified:
         flash("Order placed successfully! Note: Your teacher account is awaiting Main Admin verification; priority queueing will activate once verified.", "info")
@@ -376,28 +431,47 @@ def cancel_order(order_id):
               "use 'Request Refund' instead.", "warning")
         return redirect(url_for('canteen.order_detail', order_code=order.order_code))
 
-    # Restore stock
-    for item in order.items:
-        canteen_item = CanteenItem.query.get(item.item_id)
-        if canteen_item:
-            canteen_item.stock_quantity += item.quantity
+    # Phase 7: release the reserved stock back to the menu
+    payment_service.release_reservation(order)
 
     order.order_status = 'cancelled'
-    order.payment_status = 'refunded'
     order.refund_reason = request.form.get('refund_reason', 'Cancelled by customer before preparation')
+    db.session.flush()
+
+    # ---- Phase 7: refund through the payment gateway when real capture happened
+    # The customer's own cancellation is recorded as the authorisation.
+    paid_online = bool(order.payment and order.payment.status == 'succeeded')
+    refund, refund_result = None, None
+    if paid_online:
+        refund, refund_result = payment_service.initiate_refund(
+            order, float(order.payment.refundable_amount), order.refund_reason, user)
+    elif order.payment_status == 'paid':
+        # Legacy pre-Phase-7 record with no gateway row: keep old marking behaviour.
+        order.payment_status = 'refunded'
     db.session.commit()
+
+    if refund_result is not None:
+        if refund_result.status == 'succeeded':
+            refund_note = f"Gateway refund {refund.refund_reference} is confirmed as settled (sandbox/test mode)."
+        elif refund_result.status == 'processing':
+            refund_note = f"Gateway refund {refund.refund_reference} is processing (reference {refund.provider_refund_id}); banks may take a few business days."
+        else:
+            refund_note = "The refund attempt failed at the gateway; the canteen team has been alerted and will retry - your money has not been lost."
+    elif paid_online or order.payment_status == 'refunded':
+        refund_note = f"₹{order.total_amount} will be returned to the original payment method."
+    else:
+        refund_note = "No online payment was captured for this order, so nothing is due back."
 
     Notification.notify(
         order.user_id, "Canteen order cancelled",
-        f"Order {order.order_code} was cancelled and ₹{order.total_amount} will be "
-        "returned to the original payment method.",
+        f"Order {order.order_code} was cancelled. {refund_note}",
         category='canteen',
         link_url=url_for('canteen.order_detail', order_code=order.order_code),
         dedup_key=f"canteen:{order.id}:cancelled",
     )
     db.session.commit()
 
-    flash(f"Order #{order.order_code} cancelled. Simulated refund of ₹{order.total_amount} initiated to original payment source.", "info")
+    flash(f"Order #{order.order_code} cancelled. {refund_note}", "info")
     return redirect(url_for('canteen.my_orders'))
 
 @canteen_bp.route('/order/<int:order_id>/request-refund', methods=['POST'])
@@ -421,6 +495,9 @@ def request_refund(order_id):
 
     order.order_status = 'refund_requested'
     order.refund_reason = (request.form.get('refund_reason') or 'Refund requested by customer').strip()[:500]
+    # Phase 7 step 1: record the complaint against the payment so the canteen
+    # admin can verify, authorise and initiate the gateway refund.
+    payment_service.record_complaint(order, user, order.refund_reason)
     db.session.commit()
 
     Notification.notify(
@@ -439,3 +516,30 @@ def request_refund(order_id):
 
     flash(f"Refund requested for order #{order.order_code}. You will be notified when it is processed.", "info")
     return redirect(url_for('canteen.order_detail', order_code=order.order_code))
+
+@canteen_bp.route('/webhook/<provider_slug>', methods=['POST'])
+def payment_webhook(provider_slug):
+    """
+    Phase 7: payment gateway webhook receiver (sandbox + Stripe test mode).
+    - The RAW request body is signature-verified before anything is touched;
+      an invalid signature is rejected with 400 and audited (no secrets shown).
+    - Duplicate deliveries are rejected by the unique gateway event id.
+    - Payment/refund state only ever changes from backend-verified facts.
+    """
+    provider = get_provider()
+    if provider.name != provider_slug:
+        return jsonify({'error': 'unknown provider'}), 404
+
+    body = request.get_data()
+    try:
+        event = provider.normalize_event(provider.verify_webhook(request.headers, body))
+    except WebhookVerificationError as exc:
+        AuditLog.log(
+            action='PAYMENT_WEBHOOK_REJECTED', module='CANTEEN',
+            details=f"Webhook signature verification failed: {exc}",
+            ip_address=request.remote_addr,
+        )
+        return jsonify({'error': 'invalid signature'}), 400
+
+    outcome = payment_service.process_webhook_event(provider.name, event)
+    return jsonify({'status': outcome}), (200 if outcome != 'failed' else 500)

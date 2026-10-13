@@ -400,7 +400,7 @@ class CanteenOrder(db.Model):
     # Phase 6 statuses: 'pending', 'confirmed', 'preparing', 'ready', 'collected',
     # 'cancelled', 'refund_requested', 'refund_processing', 'refunded'
     # ('placed' remains valid for pre-Phase-6 legacy records and is shown as Pending)
-    payment_status = db.Column(db.String(20), nullable=False, default='paid') # 'pending', 'paid', 'refunded'
+    payment_status = db.Column(db.String(20), nullable=False, default='paid') # 'pending', 'paid', 'partially_refunded', 'refunded'
     payment_method = db.Column(db.String(30), default='upi_simulation')
     qr_code_path = db.Column(db.String(255), nullable=True)
     refund_reason = db.Column(db.Text, nullable=True)
@@ -410,6 +410,8 @@ class CanteenOrder(db.Model):
 
     items = db.relationship('CanteenOrderItem', backref='order', lazy=True, cascade="all, delete-orphan")
     slot = db.relationship('CanteenPickupSlot', backref='orders', lazy=True)
+    # Phase 7: gateway payment record + refund trail (1 order : 0..1 payment)
+    payment = db.relationship('Payment', back_populates='order', uselist=False, lazy=True)
 
     # Phase 6: customer-facing labels for every lifecycle state
     STATUS_LABELS = {
@@ -462,6 +464,137 @@ class CanteenOrderItem(db.Model):
     unit_price = db.Column(db.Numeric(8, 2), nullable=False)
     quantity = db.Column(db.Integer, default=1, nullable=False)
     subtotal = db.Column(db.Numeric(8, 2), nullable=False)
+
+
+# ============================================================ PHASE 7: PAYMENTS
+
+class Payment(db.Model):
+    """
+    One gateway payment per order. The gateway intent id is UNIQUE, so the same
+    transaction can never be captured twice; every status change is driven only
+    by backend verification (provider confirm call or a signature-verified
+    webhook) - never by anything the browser claims.
+    """
+    __tablename__ = 'payments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('canteen_orders.id', ondelete='CASCADE'),
+                         nullable=False, unique=True, index=True)
+    provider = db.Column(db.String(20), nullable=False, default='sandbox')  # 'sandbox' | 'stripe'
+    intent_id = db.Column(db.String(120), nullable=False, unique=True)      # gateway payment-intent ref
+    transaction_reference = db.Column(db.String(120), nullable=True)        # gateway charge ref (recorded)
+    client_secret = db.Column(db.String(255), nullable=True)                # shown to the payer only
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    currency = db.Column(db.String(8), nullable=False, default='inr')
+    # 'created' -> 'processing' | 'succeeded' | 'failed' | 'canceled'
+    # succeeded -> 'refunded' | 'partially_refunded'
+    status = db.Column(db.String(24), nullable=False, default='created', index=True)
+    failure_reason = db.Column(db.Text, nullable=True)
+    refunded_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
+    # True when the intent was captured but the order could not be confirmed
+    # (mismatch is surfaced to admins and refundable - money is never lost).
+    confirm_mismatch = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    succeeded_at = db.Column(db.DateTime, nullable=True)
+    failed_at = db.Column(db.DateTime, nullable=True)
+
+    order = db.relationship('CanteenOrder', back_populates='payment')
+    refunds = db.relationship('Refund', back_populates='payment', lazy=True,
+                              cascade="all, delete-orphan", order_by='Refund.id')
+
+    @property
+    def refundable_amount(self):
+        return max(float(self.amount or 0) - float(self.refunded_amount or 0), 0.0)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "order_code": self.order.order_code if self.order else None,
+            "provider": self.provider,
+            "intent_id": self.intent_id,
+            "transaction_reference": self.transaction_reference,
+            "amount": float(self.amount),
+            "currency": self.currency,
+            "status": self.status,
+            "refunded_amount": float(self.refunded_amount or 0),
+            "created_at": self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else None,
+        }
+
+
+class Refund(db.Model):
+    """
+    Full or partial refund trail. Lifecycle mirrors the required workflow:
+    complaint recorded ('requested') -> verified -> authorized + initiated
+    through the gateway ('pending'/'processing') -> status only becomes
+    'succeeded' on reliable gateway confirmation (sync result, re-sync or
+    verified webhook). Failures stay visible for retry - nothing silent.
+    """
+    __tablename__ = 'refunds'
+
+    id = db.Column(db.Integer, primary_key=True)
+    refund_reference = db.Column(db.String(40), nullable=False, unique=True)  # our own REF-... code
+    payment_id = db.Column(db.Integer, db.ForeignKey('payments.id', ondelete='CASCADE'),
+                           nullable=True, index=True)  # NULL: complaint on a legacy/cash order (no gateway payment)
+    order_id = db.Column(db.Integer, db.ForeignKey('canteen_orders.id', ondelete='CASCADE'),
+                         nullable=False, index=True)
+    provider_refund_id = db.Column(db.String(120), nullable=True, unique=True)  # gateway refund ref
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    currency = db.Column(db.String(8), nullable=False, default='inr')
+    is_partial = db.Column(db.Boolean, nullable=False, default=False)
+    # 'requested' -> 'processing' | 'succeeded' | 'failed' ('failed' -> retry -> 'processing')
+    status = db.Column(db.String(20), nullable=False, default='requested', index=True)
+    # 1. complaint record
+    complaint_note = db.Column(db.Text, nullable=True)
+    requested_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    # 4. explicit authorization by canteen/main admin before the gateway call
+    authorized_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    authorized_at = db.Column(db.DateTime, nullable=True)
+    initiated_at = db.Column(db.DateTime, nullable=True)
+    confirmed_at = db.Column(db.DateTime, nullable=True)   # reliable gateway confirmation time
+    gateway_message = db.Column(db.String(255), nullable=True)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    payment = db.relationship('Payment', back_populates='refunds')
+    order = db.relationship('CanteenOrder', backref=db.backref('refund_records', lazy=True))
+
+    @property
+    def status_label(self):
+        return {
+            'requested': 'Authorized Pending', 'processing': 'With Gateway',
+            'succeeded': 'Refunded', 'failed': 'Failed - Retry Needed',
+        }.get(self.status, self.status.title())
+
+    def to_dict(self):
+        return {
+            "refund_reference": self.refund_reference,
+            "amount": float(self.amount),
+            "is_partial": self.is_partial,
+            "status": self.status,
+            "provider_refund_id": self.provider_refund_id,
+        }
+
+
+class WebhookEvent(db.Model):
+    """
+    Every signature-verified gateway event is recorded here keyed by the
+    provider's UNIQUE event id - a duplicate delivery is detected before any
+    business logic runs, so success/refund handlers are exactly-once.
+    """
+    __tablename__ = 'webhook_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    provider = db.Column(db.String(20), nullable=False)
+    event_id = db.Column(db.String(120), nullable=False, unique=True)  # duplicate-webhook guard
+    event_type = db.Column(db.String(80), nullable=False)
+    payload = db.Column(db.Text, nullable=True)
+    # 'processed' | 'ignored' | 'failed'
+    status = db.Column(db.String(16), nullable=False, default='ignored')
+    error = db.Column(db.String(255), nullable=True)
+    received_at = db.Column(db.DateTime, default=datetime.utcnow)
+    processed_at = db.Column(db.DateTime, nullable=True)
 
 
 class AuditLog(db.Model):

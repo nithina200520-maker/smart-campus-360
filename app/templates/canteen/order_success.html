@@ -14,7 +14,12 @@
           <i class="fa-solid fa-circle-check fa-3x"></i>
         </div>
 
-        <h3 class="fw-bold text-dark mb-1">Canteen Booking Confirmed!</h3>
+        <h3 class="fw-bold text-dark mb-1">
+          {% if order.order_status == 'confirmed' %}Canteen Booking Confirmed!
+          {% elif order.payment and order.payment.status == 'processing' %}Payment In Progress
+          {% elif order.payment and order.payment.status == 'failed' %}Payment Failed
+          {% else %}Order {{ order.status_label }}{% endif %}
+        </h3>
         <p class="text-muted small mb-3">Order Tracking Code: <strong class="font-monospace text-primary">#{{ order.order_code }}</strong></p>
 
         <!-- Priority Flag Badge -->
@@ -69,10 +74,41 @@
             </div>
 
             <div class="col-6 text-muted">Payment Status:</div>
-            <div class="col-6 fw-bold text-end text-success text-uppercase">{{ order.payment_status }} ({{ order.payment_method }})</div>
+            <div class="col-6 fw-bold text-end text-uppercase">
+              <span class="badge {% if order.payment_status == 'paid' %}bg-success{% elif order.payment_status == 'refunded' %}bg-danger{% elif order.payment_status == 'partially_refunded' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ order.payment_status }}</span>
+              <span class="text-muted small">({{ order.payment_method.replace('_',' ') }})</span>
+            </div>
 
-            <div class="col-6 text-muted">Total Paid:</div>
+            <div class="col-6 text-muted">{% if order.payment_status in ['paid', 'partially_refunded', 'refunded'] %}Total Paid:{% else %}Order Value:{% endif %}</div>
             <div class="col-6 fw-bold text-end fs-6 text-dark">₹{{ "%.2f"|format(order.total_amount) }}</div>
+
+            {% if order.payment %}
+            <div class="col-6 text-muted">Transaction Reference:</div>
+            <div class="col-6 fw-bold text-end font-monospace small text-break">
+              {{ order.payment.transaction_reference or order.payment.intent_id }}
+              <span class="badge bg-light text-muted border text-uppercase">{{ order.payment.provider }}</span>
+            </div>
+            {% if order.payment.refunded_amount and order.payment.refunded_amount > 0 %}
+            <div class="col-6 text-muted">Refunded so far:</div>
+            <div class="col-6 fw-bold text-end text-danger">₹{{ "%.2f"|format(order.payment.refunded_amount) }}</div>
+            {% endif %}
+            {% endif %}
+            {% if order.payment and order.payment.status == 'processing' %}
+            <div class="col-12 mt-2">
+              <div class="alert alert-info small py-2 mb-0">
+                <i class="fa-solid fa-hourglass-half me-1"></i>
+                Your payment is still being completed by the gateway. This order confirms automatically once the payment is verified - nothing is charged twice.
+              </div>
+            </div>
+            {% endif %}
+            {% if order.payment and order.payment.status == 'failed' %}
+            <div class="col-12 mt-2">
+              <div class="alert alert-danger small py-2 mb-0">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                Payment failed ({{ order.payment.failure_reason or 'declined' }}) - nothing was charged.
+              </div>
+            </div>
+            {% endif %}
 
             {% if order.refund_reason %}
             <div class="col-6 text-muted">Refund Note:</div>
@@ -80,6 +116,31 @@
             {% endif %}
           </div>
         </div>
+
+        {% if order.refund_records %}
+        <div class="text-start mb-4">
+          <h6 class="fw-bold text-dark mb-2">Refund Trail:</h6>
+          <ul class="list-group list-group-flush small">
+            {% for r in order.refund_records|reverse %}
+            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+              <span>
+                <span class="font-monospace">{{ r.refund_reference }}</span>
+                {% if r.is_partial %}<span class="badge bg-warning text-dark ms-1">Partial</span>{% endif %}
+                {% if r.provider_refund_id %}<span class="text-muted d-block font-monospace">Gateway: {{ r.provider_refund_id }}</span>{% endif %}
+              </span>
+              <span class="fw-bold text-end">
+                ₹{{ "%.2f"|format(r.amount) }}
+                <span class="badge {% if r.status == 'succeeded' %}bg-success{% elif r.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %} d-block">{{ r.status_label }}</span>
+              </span>
+            </li>
+            {% endfor %}
+          </ul>
+          <p class="text-muted small mt-2 mb-0">
+            <i class="fa-solid fa-circle-info me-1"></i>
+            Refunds are marked complete only after the payment gateway confirms them. Sandbox/test-mode refunds do not move real money.
+          </p>
+        </div>
+        {% endif %}
 
         <!-- Line items -->
         <div class="text-start mb-4">

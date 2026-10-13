@@ -230,7 +230,7 @@ CREATE TABLE IF NOT EXISTS canteen_orders (
     estimated_ready_at DATETIME NULL COMMENT 'Phase 6: realistic ready-time estimate',
     confirmed_at DATETIME NULL COMMENT 'Phase 6: allocation confirmation timestamp',
     order_status VARCHAR(24) NOT NULL DEFAULT 'placed' COMMENT 'placed (legacy), pending, confirmed, preparing, ready, collected, cancelled, refund_requested, refund_processing, refunded',
-    payment_status ENUM('pending', 'paid', 'refunded') NOT NULL DEFAULT 'paid',
+    payment_status ENUM('pending', 'paid', 'partially_refunded', 'refunded') NOT NULL DEFAULT 'paid',
     payment_method ENUM('upi_simulation', 'cash_at_counter', 'card') NOT NULL DEFAULT 'upi_simulation',
     qr_code_path VARCHAR(255) NULL COMMENT 'Path to generated QR code verification image',
     refund_reason TEXT NULL,
@@ -272,4 +272,72 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_audit_module (module),
     INDEX idx_audit_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ------------------------------------------------------------------------------
+-- 6. PHASE 7: PAYMENTS, REFUNDS & WEBHOOK EVENTS
+-- Sandbox / Stripe-test-mode payment processing. Status changes are driven ONLY
+-- by backend verification (provider confirm call or signature-verified webhook).
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS payments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL UNIQUE COMMENT 'One gateway payment per order (duplicate-payment guard)',
+    provider VARCHAR(20) NOT NULL DEFAULT 'sandbox' COMMENT 'sandbox | stripe (test mode only)',
+    intent_id VARCHAR(120) NOT NULL UNIQUE COMMENT 'Gateway payment-intent reference (can never be captured twice)',
+    transaction_reference VARCHAR(120) NULL COMMENT 'Gateway charge/transaction reference (recorded)',
+    client_secret VARCHAR(255) NULL COMMENT 'Shown to the payer only; never a server credential',
+    amount DECIMAL(10, 2) NOT NULL,
+    currency VARCHAR(8) NOT NULL DEFAULT 'inr',
+    status VARCHAR(24) NOT NULL DEFAULT 'created' COMMENT 'created, processing, succeeded, failed, canceled, refunded, partially_refunded',
+    failure_reason TEXT NULL,
+    refunded_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    confirm_mismatch BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'TRUE: money captured but order confirmation failed - admin must resolve',
+    succeeded_at DATETIME NULL,
+    failed_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES canteen_orders(id) ON DELETE CASCADE,
+    INDEX idx_payment_status (status),
+    INDEX idx_payment_mismatch (confirm_mismatch)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS refunds (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    refund_reference VARCHAR(40) NOT NULL UNIQUE COMMENT 'Our own REF-YYYYMMDD-XXXX code',
+    payment_id INT NULL COMMENT 'NULL: complaint on a legacy/cash order without a gateway payment',
+    order_id INT NOT NULL,
+    provider_refund_id VARCHAR(120) NULL UNIQUE COMMENT 'Gateway refund reference (tracked)',
+    amount DECIMAL(10, 2) NOT NULL,
+    currency VARCHAR(8) NOT NULL DEFAULT 'inr',
+    is_partial BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'TRUE for partial refunds where applicable',
+    status VARCHAR(20) NOT NULL DEFAULT 'requested' COMMENT 'requested, processing, succeeded (only on reliable confirmation), failed (visible for retry)',
+    complaint_note TEXT NULL COMMENT '1. Recorded complaint',
+    requested_by INT NULL,
+    authorized_by INT NULL COMMENT '4. Required authorization (canteen/main admin)',
+    authorized_at DATETIME NULL,
+    initiated_at DATETIME NULL COMMENT '5. Gateway initiation time',
+    confirmed_at DATETIME NULL COMMENT '7. Reliable gateway confirmation time',
+    gateway_message VARCHAR(255) NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES canteen_orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (authorized_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_refund_status (status),
+    INDEX idx_refund_order (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS webhook_events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    provider VARCHAR(20) NOT NULL,
+    event_id VARCHAR(120) NOT NULL UNIQUE COMMENT 'Duplicate-webhook guard: each gateway event id is processed exactly once',
+    event_type VARCHAR(80) NOT NULL,
+    payload TEXT NULL COMMENT 'Signature-verified event payload (truncated)',
+    status VARCHAR(16) NOT NULL DEFAULT 'ignored' COMMENT 'processed | ignored | failed',
+    error VARCHAR(255) NULL,
+    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at DATETIME NULL,
+    INDEX idx_webhook_provider_event (provider, event_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

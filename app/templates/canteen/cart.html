@@ -158,12 +158,15 @@
               <i class="fa-solid fa-credit-card text-success me-1"></i> Payment Method
             </label>
             <select name="payment_method" class="form-select mb-2">
-              <option value="upi_simulation" selected>Simulated UPI (Google Pay / PhonePe / Paytm)</option>
-              <option value="card">Debit / Credit Card (Simulated)</option>
+              <option value="upi_simulation" selected>UPI (Sandbox / Test-Mode Gateway)</option>
+              <option value="card">Debit / Credit Card (Sandbox / Test-Mode Gateway)</option>
               <option value="cash_at_counter">Cash at Canteen Counter on Pickup</option>
             </select>
             <div class="small text-muted bg-light p-2 rounded">
-              <i class="fa-solid fa-shield-halved text-success me-1"></i> Safe simulation mode enabled for testing.
+              <i class="fa-solid fa-shield-halved text-success me-1"></i>
+              Online payments run through a sandbox/test-mode gateway: every payment is verified
+              on the server before your order confirms, and <strong>no real money is transferred</strong>.
+              Gateway secrets are never exposed to your browser.
             </div>
           </div>
 

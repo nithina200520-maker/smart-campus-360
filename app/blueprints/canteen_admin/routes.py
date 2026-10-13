@@ -6,13 +6,14 @@ from flask import render_template, request, redirect, url_for, flash, jsonify, c
 from app.blueprints.canteen_admin import canteen_admin_bp
 from app.models import (
     CanteenOrder, CanteenOrderItem, CanteenItem, CanteenCategory,
-    CanteenPickupSlot, Notification, AuditLog,
+    CanteenPickupSlot, Notification, AuditLog, Payment, Refund, WebhookEvent,
 )
 from app.database import db
 from app.utils.auth_helpers import role_required, get_current_user
 from app.utils.qr_generator import generate_order_qr, parse_pickup_payload
 from app.utils.image_matcher import validate_image_bytes
 from app.utils import canteen_booking as booking
+from app.utils import payment_service
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 MAX_PHOTO_BYTES = 8 * 1024 * 1024
@@ -99,6 +100,25 @@ def dashboard():
         for s in booking.upcoming_slots(days=3)
     ]
 
+    # ---- Phase 7 payment/refund console ----------------------------------
+    refund_cases = (
+        Refund.query
+        .filter(Refund.status.in_(('requested', 'processing', 'failed')))
+        .order_by(Refund.created_at.desc())
+        .limit(25).all()
+    )
+    mismatch_orders = (
+        CanteenOrder.query.join(Payment, Payment.order_id == CanteenOrder.id)
+        .filter(Payment.confirm_mismatch.is_(True))
+        .order_by(CanteenOrder.created_at.desc()).limit(10).all()
+    )
+    captured_total = float(
+        db.session.query(db.func.sum(Payment.amount))
+        .filter(Payment.status.in_(('succeeded', 'partially_refunded', 'refunded'))).scalar() or 0.0)
+    refunded_total = float(
+        db.session.query(db.func.sum(Refund.amount))
+        .filter(Refund.status == 'succeeded').scalar() or 0.0)
+
     return render_template(
         'canteen_admin/dashboard.html',
         user=user,
@@ -112,6 +132,10 @@ def dashboard():
         refund_count=refund_count,
         open_slots=open_slots,
         booking=booking,
+        refund_cases=refund_cases,
+        mismatch_orders=mismatch_orders,
+        captured_total=captured_total,
+        refunded_total=refunded_total,
     )
 
 # ---------------------------------------------------------------- lifecycle
@@ -142,9 +166,42 @@ def update_order_status(order_id):
                 item = CanteenItem.query.get(line.item_id)
                 if item:
                     item.stock_quantity += line.quantity
-        order.payment_status = 'refunded'
         order.refund_reason = request.form.get('refund_reason') or order.refund_reason or \
             ('Cancelled by canteen staff' if new_status == 'cancelled' else 'Refund processed by canteen staff')
+        # ---- Phase 7: a captured online payment must be refunded THROUGH the
+        # gateway. The status column is never flipped to fake a refund, so a
+        # paid student order can never be silently cancelled.
+        if order.payment and order.payment.status in ('succeeded', 'partially_refunded'):
+            order.order_status = 'refund_processing'
+            db.session.flush()
+            admin = get_current_user()
+            refund, result = payment_service.initiate_refund(
+                order, None, order.refund_reason, admin)
+            if new_status == 'cancelled':
+                order.order_status = 'cancelled'
+                _notify_order(order, "Order cancelled",
+                              f"Order {order.order_code} was cancelled by the canteen. "
+                              "Your payment is being returned via the original method.")
+            db.session.commit()
+            AuditLog.log(
+                action='CANTEEN_ORDER_STATUS', module='CANTEEN', user_id=admin.id,
+                details=f"Order {order.order_code}: {previous_status} → {new_status} via "
+                        f"gateway refund {getattr(refund, 'refund_reference', '-')} "
+                        f"({getattr(result, 'status', result)})",
+                ip_address=request.remote_addr,
+            )
+            if refund is None:
+                flash(f"Order #{order.order_code}: gateway refund could not start ({result}).", "danger")
+            elif refund.status == 'succeeded':
+                flash(f"Gateway refund {refund.refund_reference} CONFIRMED settled (sandbox/test mode).", "success")
+            elif refund.status == 'processing':
+                flash(f"Gateway refund {refund.refund_reference} accepted but not yet settled - "
+                      "it stays visible in the refund queue for re-sync.", "info")
+            else:
+                flash(f"Gateway refund FAILED at the provider. The order stays visible for retry; "
+                      "no money has been returned yet.", "warning")
+            return redirect(url_for('canteen_admin.dashboard'))
+        order.payment_status = 'refunded'  # legacy/cash record with no gateway capture
 
     order.order_status = new_status
 
@@ -179,6 +236,117 @@ def update_order_status(order_id):
         ip_address=request.remote_addr,
     )
     flash(f"Order #{order.order_code} status updated to {order.status_label.upper()}.", "success")
+    return redirect(url_for('canteen_admin.dashboard'))
+
+# ---------------------------------------------------------------- refunds (Phase 7)
+
+@canteen_admin_bp.route('/orders/<int:order_id>/refund', methods=['POST'])
+@role_required(['canteen_admin', 'main_admin'])
+def process_refund(order_id):
+    """
+    Phase 7 refund console: verify the payment, authorise a FULL or PARTIAL
+    amount and initiate it through the gateway. Customer complaints recorded
+    via 'Request Refund' are picked up automatically from the queue.
+    """
+    order = CanteenOrder.query.get_or_404(order_id)
+    admin = get_current_user()
+    raw_amount = request.form.get('amount', '').strip()
+    reason = (request.form.get('refund_reason') or order.refund_reason or
+              'Refund authorised by canteen staff').strip()[:500]
+
+    amount = None
+    if raw_amount:
+        try:
+            amount = round(float(raw_amount), 2)
+        except ValueError:
+            flash("Invalid refund amount - enter a number like 45.50 (leave blank for the full amount).", "danger")
+            return redirect(url_for('canteen_admin.dashboard'))
+
+    # No captured gateway payment: cash/legacy path. Mark it locally and say
+    # plainly that no gateway transfer happened - never fake a money movement.
+    if not order.payment or order.payment.status not in ('succeeded', 'partially_refunded'):
+        order.order_status = 'refunded'
+        order.payment_status = 'refunded'
+        order.refund_reason = reason
+        db.session.commit()
+        _notify_order(order, "Refund completed",
+                      f"Order {order.order_code} was marked refunded by the canteen "
+                      "(cash/legacy settlement - no gateway capture on record).")
+        AuditLog.log(action='CANTEEN_REFUND_AUTHORIZED', module='CANTEEN', user_id=admin.id,
+                     details=f"Order {order.order_code}: cash/legacy refund marked (no gateway payment)",
+                     ip_address=request.remote_addr)
+        flash(f"Order #{order.order_code} marked REFUNDED (cash/legacy - no gateway payment on record).", "info")
+        return redirect(url_for('canteen_admin.dashboard'))
+
+    refund, result = payment_service.initiate_refund(order, amount, reason, admin)
+    if refund is None:
+        msg = ("Refund refused: the amount exceeds the still-refundable balance."
+               if result == 'AMOUNT_INVALID' else f"Refund could not be initiated ({result}).")
+        flash(msg, "danger")
+        return redirect(url_for('canteen_admin.dashboard'))
+
+    order.refund_reason = reason
+    if refund.status != 'succeeded' and order.order_status in booking.REFUND + ('pending', 'confirmed', 'preparing', 'ready'):
+        order.order_status = 'refund_processing'
+    db.session.commit()
+    AuditLog.log(
+        action='CANTEEN_REFUND_AUTHORIZED', module='CANTEEN', user_id=admin.id,
+        details=f"Order {order.order_code}: authorised {refund.refund_reference} "
+                f"₹{float(refund.amount):.2f} ({'partial' if refund.is_partial else 'full'}) -> {refund.status}",
+        ip_address=request.remote_addr,
+    )
+    if refund.status == 'succeeded':
+        flash(f"Gateway refund {refund.refund_reference} CONFIRMED settled (sandbox/test mode).", "success")
+    elif refund.status == 'processing':
+        flash(f"Gateway refund {refund.refund_reference} accepted; settlement pending with the bank - "
+              "re-sync it from the refund queue.", "info")
+    else:
+        flash(f"Gateway refund attempt FAILED ({refund.gateway_message}). It stays visible in the queue "
+              "for retry - the customer's money has not been lost.", "warning")
+    return redirect(url_for('canteen_admin.dashboard'))
+
+@canteen_admin_bp.route('/refunds/<int:refund_id>/retry', methods=['POST'])
+@role_required(['canteen_admin', 'main_admin'])
+def retry_refund(refund_id):
+    """Re-sync a delayed ('processing') refund or re-initiate a failed one."""
+    refund = Refund.query.get_or_404(refund_id)
+    admin = get_current_user()
+    refund, result = payment_service.retry_refund(refund, admin)
+    db.session.commit()
+    AuditLog.log(action='CANTEEN_REFUND_RETRY', module='CANTEEN', user_id=admin.id,
+                 details=f"Refund {refund.refund_reference}: {result if isinstance(result, str) else result.status} "
+                         f"(attempt {refund.attempts})", ip_address=request.remote_addr)
+    if refund.status == 'succeeded':
+        flash(f"Refund {refund.refund_reference} is now CONFIRMED settled.", "success")
+    elif refund.status == 'processing':
+        flash(f"Refund {refund.refund_reference} is still settling with the bank "
+              "(the gateway has not confirmed it yet).", "info")
+    elif result == 'NOT_RETRYABLE':
+        flash("This refund record is not in a retryable state.", "warning")
+    else:
+        flash(f"Retry failed again at the gateway ({refund.gateway_message}). It remains visible for another attempt.", "warning")
+    return redirect(url_for('canteen_admin.dashboard'))
+
+@canteen_admin_bp.route('/orders/<int:order_id>/resolve-mismatch', methods=['POST'])
+@role_required(['canteen_admin', 'main_admin'])
+def resolve_payment_mismatch(order_id):
+    """
+    Phase 7: 'payment captured but order confirmation failed' - admin retry.
+    Either the order gets confirmed properly (QR + notification) or the admin
+    sends it to the refund console; the money is never left unaccounted.
+    """
+    order = CanteenOrder.query.get_or_404(order_id)
+    admin = get_current_user()
+    if not (order.payment and order.payment.confirm_mismatch):
+        flash("No open payment/order mismatch on this order.", "info")
+        return redirect(url_for('canteen_admin.dashboard'))
+    try:
+        payment_service.resolve_confirm_mismatch(order, admin)
+        db.session.commit()
+        flash(f"Order #{order.order_code} confirmed and QR issued - payment mismatch resolved.", "success")
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        flash(f"Could not confirm the order ({exc}). Use the refund console to return the payment instead.", "danger")
     return redirect(url_for('canteen_admin.dashboard'))
 
 # ---------------------------------------------------------------- QR pickup

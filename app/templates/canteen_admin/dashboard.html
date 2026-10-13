@@ -8,10 +8,10 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <div>
       <span class="badge bg-success text-uppercase px-3 py-1 rounded-pill mb-1">
-        <i class="fa-solid fa-utensils me-1"></i> Canteen Operations · Phase 6
+        <i class="fa-solid fa-utensils me-1"></i> Canteen Operations · Phase 7
       </span>
       <h2 class="fw-bold text-dark mb-0">Live Kitchen & Preparation Queue</h2>
-      <p class="text-muted small mb-0">Configurable teacher-first allocation, slot capacity, refund workflow, and secure QR pickup</p>
+      <p class="text-muted small mb-0">Teacher-first allocation, slot capacity, gateway payments/refunds and secure QR pickup</p>
     </div>
     <div class="d-flex gap-2 mt-2 mt-md-0 flex-wrap">
       <a href="{{ url_for('canteen_admin.menu_manage') }}" class="btn btn-outline-success rounded-pill">
@@ -113,7 +113,15 @@
                     </div>
                     {% if o.estimated_ready_at %}<div class="small text-primary">Ready ~{{ o.estimated_ready_at.strftime('%H:%M') }}</div>{% endif %}
                   </td>
-                  <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}</td>
+                  <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}
+                    <div class="small mt-1">
+                      {% if o.payment %}
+                        <span class="badge {% if o.payment.status == 'succeeded' %}bg-success{% elif o.payment.status in ['refunded', 'partially_refunded'] %}bg-warning text-dark{% elif o.payment.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">{{ o.payment.status|upper }}</span>
+                      {% else %}
+                        <span class="badge bg-light text-muted border">{{ o.payment_status|upper }}</span>
+                      {% endif %}
+                    </div>
+                  </td>
                   <td>
                     <span class="badge {% if o.order_status == 'ready' %}bg-info text-dark{% elif o.order_status == 'preparing' %}bg-warning text-dark{% elif o.order_status == 'confirmed' %}bg-success{% elif 'refund' in o.order_status %}bg-secondary{% else %}bg-primary{% endif %} text-uppercase">
                       {{ o.status_label }}
@@ -202,8 +210,75 @@
       </div>
     </div>
 
-    <!-- Right Column: QR Verification, Slots & Quick Metrics -->
+    <!-- Right Column: Payments Console, QR Verification, Slots & Quick Metrics -->
     <div class="col-lg-4">
+
+      <!-- Phase 7: Payment & Refund Console -->
+      <div class="card campus-card border-0 shadow-sm mb-4">
+        <div class="campus-card-header bg-white d-flex justify-content-between align-items-center">
+          <span class="fw-bold text-dark"><i class="fa-solid fa-money-bill-transfer text-primary me-2"></i>Payment &amp; Refund Console</span>
+          <span class="badge bg-info text-dark rounded-pill">Sandbox / Test Mode</span>
+        </div>
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between small mb-2">
+            <span class="text-muted">Captured: <strong class="text-success">₹{{ "%.2f"|format(captured_total) }}</strong></span>
+            <span class="text-muted">Refunded (confirmed): <strong class="text-danger">₹{{ "%.2f"|format(refunded_total) }}</strong></span>
+          </div>
+
+          {% if mismatch_orders %}
+          <div class="alert alert-warning small py-2">
+            <div class="fw-bold mb-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>Payment captured, order not confirmed</div>
+            {% for o in mismatch_orders %}
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="font-monospace">#{{ o.order_code }} · ₹{{ "%.2f"|format(o.payment.amount) }}</span>
+              <form method="POST" action="{{ url_for('canteen_admin.resolve_payment_mismatch', order_id=o.id) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-warning rounded-pill px-2">Confirm &amp; Issue QR</button>
+              </form>
+            </div>
+            {% endfor %}
+            <div class="small mb-0">If confirmation keeps failing, refund the captured payment from the queue below - the money is never left unaccounted.</div>
+          </div>
+          {% endif %}
+
+          {% for r in refund_cases %}
+          <div class="border rounded-3 p-2 mb-2 bg-light">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <span class="fw-bold font-monospace small">#{{ r.order.order_code }}</span>
+                <span class="badge {% if r.status == 'failed' %}bg-danger{% elif r.status == 'processing' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ r.status_label }}</span>
+              </div>
+              <span class="fw-bold">₹{{ "%.2f"|format(r.amount) }}{% if r.is_partial %} <span class="badge bg-warning text-dark">part</span>{% endif %}</span>
+            </div>
+            {% if r.complaint_note %}<div class="small text-muted mt-1">&ldquo;{{ r.complaint_note[:140] }}&rdquo;</div>{% endif %}
+            {% if r.provider_refund_id %}<div class="small text-muted font-monospace">Gateway: {{ r.provider_refund_id }} · {{ r.attempts }} attempt{{ 's' if r.attempts != 1 }}</div>{% endif %}
+            <div class="d-flex gap-2 mt-2 flex-wrap">
+              {% if r.status == 'requested' %}
+              <form method="POST" action="{{ url_for('canteen_admin.process_refund', order_id=r.order_id) }}" class="d-flex gap-1 align-items-center">
+                {% set cap = (r.payment.refundable_amount if r.payment else r.amount)|round(2) %}
+                <input type="number" step="0.01" min="0.01" max="{{ cap }}" name="amount" class="form-control form-control-sm" style="width: 95px;" placeholder="Full" title="Blank = full refund; smaller amount = partial refund">
+                <input type="hidden" name="refund_reason" value="{{ r.complaint_note or 'Refund authorised by canteen staff' }}">
+                <button type="submit" class="btn btn-sm btn-primary rounded-pill px-2">Authorise &amp; Refund</button>
+              </form>
+              {% elif r.status in ['processing', 'failed'] %}
+              <form method="POST" action="{{ url_for('canteen_admin.retry_refund', refund_id=r.id) }}">
+                <button type="submit" class="btn btn-sm btn-outline-dark rounded-pill px-2">
+                  <i class="fa-solid fa-rotate-right me-1"></i>{% if r.status == 'processing' %}Re-sync with Gateway{% else %}Retry Refund{% endif %}
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+          {% else %}
+          <div class="text-center text-muted py-2 small">
+            <i class="fa-solid fa-circle-check text-success fa-2x mb-1 d-block"></i>
+            No open refund cases.
+          </div>
+          {% endfor %}
+          <div class="small text-muted mt-2">
+            <i class="fa-solid fa-shield-halved me-1"></i>Refunds are marked settled only on reliable gateway confirmation. Sandbox/test mode never moves real money.
+          </div>
+        </div>
+      </div>
 
       <!-- Instant Pickup Verification -->
       <div class="card campus-card border-0 shadow-sm mb-4">
