@@ -584,14 +584,23 @@ def manage_lost_found():
     items = query.limit(200).all()
     pending_claims = LostFoundClaim.query.filter_by(status='pending').order_by(LostFoundClaim.created_at.desc()).all()
     recent_notifications = Notification.query.order_by(Notification.created_at.desc()).limit(60).all()
+    # PHASE 5: suggested-match review queue (highest composite first)
+    rank_expr = db.func.coalesce(LostFoundMatch.composite_score, LostFoundMatch.similarity_score)
+    suggested_matches = (LostFoundMatch.query.filter_by(status='suggested')
+                         .order_by(rank_expr.desc()).limit(100).all())
     stats = {
         'open': LostFoundItem.query.filter_by(status='open').count(),
         'claimed': LostFoundItem.query.filter_by(status='claimed').count(),
         'returned': LostFoundItem.query.filter_by(status='closed').count(),
         'pending_claims': len(pending_claims),
+        'suggested_matches': len(suggested_matches),
+        'confirmed_matches': LostFoundMatch.query.filter_by(status='verified').count(),
+        'rejected_matches': LostFoundMatch.query.filter_by(status='rejected').count(),
+        'duplicate_reports': LostFoundItem.query.filter_by(is_duplicate=True).count(),
     }
     return render_template('admin/lost_found.html', user=user, items=items,
                            pending_claims=pending_claims, notifications=recent_notifications,
+                           suggested_matches=suggested_matches,
                            stats=stats, current_status=status_f)
 
 @admin_bp.route('/lost-found/item/<int:item_id>/update-location', methods=['POST'])
@@ -726,3 +735,136 @@ def lf_send_notification(user_id):
     db.session.commit()
     flash(f"Notification sent to {target.full_name}.", "success")
     return redirect(url_for('admin.manage_lost_found'))
+
+# ---------------------------------------------------------------------------
+# PHASE 5: MATCH REVIEW WORKFLOW + AI TESTING LAB
+# ---------------------------------------------------------------------------
+
+@admin_bp.route('/lost-found/match/<int:match_id>/decision', methods=['POST'])
+@role_required('main_admin')
+def lf_match_decision(match_id):
+    """Main Admin confirms or rejects one AI-suggested lost/found pairing."""
+    admin = get_current_user()
+    match = LostFoundMatch.query.get_or_404(match_id)
+    if match.status != 'suggested':
+        flash("This match pairing was already decided.", "info")
+        return redirect(url_for('admin.manage_lost_found'))
+
+    decision = request.form.get('decision')  # 'confirm' | 'reject'
+    reason = request.form.get('reason', '').strip()
+    match.decided_by_admin_id = admin.id
+    match.decided_at = datetime.utcnow()
+    lost_item = match.lost_item
+    found_item = match.found_item
+
+    if decision == 'confirm':
+        match.status = 'verified'
+        # Surfacing a confirmed pairing moves still-open reports to 'matched'
+        for it in (lost_item, found_item):
+            if it and it.status == 'open':
+                it.status = 'matched'
+        if lost_item:
+            Notification.notify(lost_item.user_id,
+                title=f"A suggested match for '{lost_item.title}' was confirmed",
+                message=("Campus administration confirmed the AI pairing with "
+                         f"'{found_item.title if found_item else 'a found item'}'. Submit an ownership "
+                         "claim (or visit the Lost & Found office) to begin verification and collection."),
+                category='match', link_url=url_for('lost_found.item_detail', item_id=lost_item.id),
+                dedup_key=f"lf-matchdecision:{match.id}:u{lost_item.user_id}")
+        if found_item:
+            Notification.notify(found_item.user_id,
+                title=f"Administration confirmed a match for '{found_item.title}'",
+                message=("A lost report matching the item you handed in was confirmed by campus "
+                         "administration. You may be contacted to help complete the verified handover."),
+                category='match', link_url=url_for('lost_found.item_detail', item_id=found_item.id),
+                dedup_key=f"lf-matchdecision:{match.id}:u{found_item.user_id}")
+        AuditLog.log(action='LF_MATCH_CONFIRMED', module='LOST_FOUND', user_id=admin.id,
+                     details=f"Confirmed match #{match.id} "
+                             f"(lost #{match.lost_item_id} <-> found #{match.found_item_id}).",
+                     ip_address=request.remote_addr)
+        flash("Match confirmed. Both reporters were notified.", "success")
+    else:
+        match.status = 'rejected'
+        match.rejected_reason = reason or None
+        if lost_item:
+            Notification.notify(lost_item.user_id,
+                title=f"A suggested match for '{lost_item.title}' was not accepted",
+                message=("After review, administration rejected one AI-suggested pairing for your "
+                         "report. The search continues - you will be notified of new suggestions."),
+                category='match', link_url=url_for('lost_found.item_detail', item_id=lost_item.id),
+                dedup_key=f"lf-matchdecision:{match.id}:u{lost_item.user_id}")
+        AuditLog.log(action='LF_MATCH_REJECTED', module='LOST_FOUND', user_id=admin.id,
+                     details=f"Rejected match #{match.id}"
+                             f"{'; reason: ' + reason if reason else ''}.",
+                     ip_address=request.remote_addr)
+        flash("Match rejected and recorded.", "warning")
+
+    db.session.commit()
+    return redirect(url_for('admin.manage_lost_found'))
+
+@admin_bp.route('/ai-lab', methods=['GET', 'POST'])
+@role_required('main_admin')
+def ai_match_lab():
+    """
+    PHASE 5 AI testing interface: run a photograph (and optional metadata)
+    against the live Lost & Found registry WITHOUT saving anything. Shows the
+    uploaded image, embedding diagnostics, ranked similarity scores and any
+    errors - for model inspection and measured evaluation only.
+    """
+    import base64 as _b64
+    import os as _os
+    import tempfile as _tempfile
+    from app.utils.image_matcher import analyze_image_against_registry, cnn_available, validate_image_bytes as _valid
+
+    admin = get_current_user()
+    cfg = current_app.config
+    context = {
+        'user': admin,
+        'cnn_available': cnn_available(),
+        'thresholds': {
+            'min_composite': cfg.get('LF_MATCH_MIN_COMPOSITE', 0.35),
+            'strong': cfg.get('LF_STRONG_MATCH_SCORE', 0.70),
+            'medium': cfg.get('LF_MEDIUM_MATCH_SCORE', 0.50),
+            'duplicate': cfg.get('LF_DUPLICATE_SCORE', 0.65),
+        },
+        'open_items': LostFoundItem.query.filter_by(status='open').count(),
+        'result': None, 'form': {}, 'image_b64': None, 'error': None,
+    }
+
+    if request.method == 'POST':
+        file = request.files.get('photo')
+        form = {k: request.form.get(k, '').strip() for k in
+                ('title', 'category', 'color_hint', 'location_reported', 'description')}
+        compare_type = request.form.get('compare_type', 'found')
+        min_composite = request.form.get('min_composite', type=float) or context['thresholds']['min_composite']
+        limit = request.form.get('limit', type=int) or 10
+        context['form'] = {**form, 'compare_type': compare_type,
+                           'min_composite': min_composite, 'limit': limit}
+
+        if not file or not file.filename:
+            context['error'] = "Attach a photograph to analyse."
+        else:
+            ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+            if ext not in ('png', 'jpg', 'jpeg', 'webp') or not _valid(file):
+                context['error'] = "Rejected: not a valid PNG/JPG/JPEG/WEBP image."
+            else:
+                raw = file.read()
+                context['image_b64'] = _b64.b64encode(raw[:512 * 1024]).decode('ascii')
+                tmp_path = None
+                try:
+                    with _tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as tmp:
+                        tmp.write(raw)
+                        tmp_path = tmp.name
+                    candidates = LostFoundItem.query.filter_by(status='open').all()
+                    if compare_type in ('lost', 'found'):
+                        candidates = [c for c in candidates if c.report_type == compare_type]
+                    context['result'] = analyze_image_against_registry(
+                        tmp_path, form, candidates,
+                        min_composite=min_composite, limit=min(50, limit),
+                        strong=context['thresholds']['strong'],
+                        medium=context['thresholds']['medium'])
+                finally:
+                    if tmp_path:
+                        _os.unlink(tmp_path)
+
+    return render_template('admin/ai_lab.html', **context)

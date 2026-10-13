@@ -7,7 +7,9 @@ from app.blueprints.lost_found import lost_found_bp
 from app.models import LostFoundItem, LostFoundMatch, LostFoundClaim, Notification, AuditLog, User
 from app.database import db
 from app.utils.auth_helpers import login_required, restrict_visitors, get_current_user
-from app.utils.image_matcher import extract_image_features, rank_matches, validate_image_bytes
+from app.utils.image_matcher import (
+    extract_image_features, rank_matches, validate_image_bytes, find_duplicate_report,
+)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 MAX_PHOTO_BYTES = 8 * 1024 * 1024  # 8 MB upload ceiling
@@ -125,19 +127,55 @@ def report_item():
         db.session.add(new_item)
         db.session.flush() # obtain new_item.id
 
-        # PHASE 4: contextual + image composite ranking against counterpart reports
+        # PHASE 5: duplicate-report detection (same user re-reporting one item).
+        # Duplicates are kept for audit but skip AI matching so no duplicate
+        # match rows or duplicate notifications can be generated for them.
+        dup_min = current_app.config.get('LF_DUPLICATE_SCORE', 0.65)
+        dup_candidates = LostFoundItem.query.filter_by(
+            user_id=user.id, report_type=report_type).all()
+        duplicate = find_duplicate_report(new_item, dup_candidates, min_score=dup_min)
+        if duplicate:
+            new_item.is_duplicate = True
+            new_item.duplicate_of_id = duplicate["item_id"]
+            AuditLog.log(action='LF_DUPLICATE_REPORT_FLAGGED', module='LOST_FOUND', user_id=user.id,
+                         details=f"Report '{title}' flagged as duplicate of item #{duplicate['item_id']} "
+                                 f"(score {duplicate['score']}).", ip_address=request.remote_addr)
+            db.session.commit()
+            flash(f"Item reported. This looks like a duplicate of your earlier report "
+                  f"'{duplicate['title']}', so it was linked to that report and no duplicate "
+                  f"match alerts were sent.", "info")
+            return redirect(url_for('lost_found.item_detail', item_id=new_item.id))
+
+        # PHASE 4/5: contextual + image composite ranking against counterpart reports
+        min_composite = current_app.config.get('LF_MATCH_MIN_COMPOSITE', 0.35)
+        strong = current_app.config.get('LF_STRONG_MATCH_SCORE', 0.70)
+        medium = current_app.config.get('LF_MEDIUM_MATCH_SCORE', 0.50)
+        match_limit = current_app.config.get('LF_MATCH_LIMIT', 10)
         match_count = 0
         ranked = []
         if feature_vector_json or description:
             opposite_type = 'found' if report_type == 'lost' else 'lost'
             candidates = LostFoundItem.query.filter_by(report_type=opposite_type, status='open').all()
             candidates = [c for c in candidates if c.id != new_item.id]
-            ranked = rank_matches(new_item, candidates, min_composite=0.35, limit=10)
+            ranked = rank_matches(new_item, candidates, min_composite=min_composite,
+                                  limit=match_limit, strong=strong, medium=medium)
             import json as _json
+            # PHASE 5: one match row per item pair - a re-occurring pair updates
+            # nothing and re-notifies no one (duplicate suggestion prevention)
+            existing_pairs = {
+                (m.lost_item_id, m.found_item_id)
+                for m in LostFoundMatch.query.filter(
+                    db.or_(LostFoundMatch.lost_item_id == new_item.id,
+                          LostFoundMatch.found_item_id == new_item.id)).all()
+            }
             for m in ranked:
+                lost_id = new_item.id if report_type == 'lost' else m["item_id"]
+                found_id = m["item_id"] if report_type == 'lost' else new_item.id
+                if (lost_id, found_id) in existing_pairs:
+                    continue
                 match_entry = LostFoundMatch(
-                    lost_item_id=new_item.id if report_type == 'lost' else m["item_id"],
-                    found_item_id=m["item_id"] if report_type == 'lost' else new_item.id,
+                    lost_item_id=lost_id,
+                    found_item_id=found_id,
                     similarity_score=m["image_score"],
                     composite_score=m["composite_score"],
                     factors=_json.dumps(m["factors"]),
@@ -146,12 +184,16 @@ def report_item():
                 db.session.add(match_entry)
                 match_count += 1
 
-        # PHASE 4: targeted in-app notifications (only the involved users are alerted)
+        # PHASE 4/5: targeted in-app notifications (only the involved users are
+        # alerted, and the dedup_key makes the same match alert idempotent)
         counterpart_title = "Found item" if report_type == 'lost' else "Lost item"
         for m in ranked:
             counterpart = db.session.get(LostFoundItem, m["item_id"])
             if not counterpart:
                 continue
+            lost_id = new_item.id if report_type == 'lost' else m["item_id"]
+            found_id = m["item_id"] if report_type == 'lost' else new_item.id
+            pair_key = f"pair:{lost_id}-{found_id}"
             if report_type == 'lost':
                 Notification.notify(
                     user.id,
@@ -161,7 +203,8 @@ def report_item():
                              f"Similarity confidence {round(m['composite_score'] * 100)}%. "
                              "Please check the report and follow the collection instructions."),
                     category='match',
-                    link_url=url_for('lost_found.item_detail', item_id=new_item.id))
+                    link_url=url_for('lost_found.item_detail', item_id=new_item.id),
+                    dedup_key=f"lf-match:{pair_key}:u{user.id}")
                 Notification.notify(
                     counterpart.user_id,
                     title="A new lost report resembles your found item",
@@ -169,7 +212,8 @@ def report_item():
                              f"you submitted (confidence {round(m['composite_score'] * 100)}%). "
                              "Please review the match. Similarity alone is not proof of ownership."),
                     category='match',
-                    link_url=url_for('lost_found.item_detail', item_id=counterpart.id))
+                    link_url=url_for('lost_found.item_detail', item_id=counterpart.id),
+                    dedup_key=f"lf-match:{pair_key}:u{counterpart.user_id}")
             else:
                 Notification.notify(
                     user.id,
@@ -178,7 +222,8 @@ def report_item():
                              f"'{counterpart.title}' (confidence {round(m['composite_score'] * 100)}%). "
                              "Please review before handing the item over."),
                     category='match',
-                    link_url=url_for('lost_found.item_detail', item_id=new_item.id))
+                    link_url=url_for('lost_found.item_detail', item_id=new_item.id),
+                    dedup_key=f"lf-match:{pair_key}:u{user.id}")
                 Notification.notify(
                     counterpart.user_id,
                     title="Possible match found for your lost item",
@@ -187,7 +232,8 @@ def report_item():
                              f"Similarity confidence {round(m['composite_score'] * 100)}%. "
                              "Please check the report and follow the collection instructions."),
                     category='match',
-                    link_url=url_for('lost_found.item_detail', item_id=counterpart.id))
+                    link_url=url_for('lost_found.item_detail', item_id=counterpart.id),
+                    dedup_key=f"lf-match:{pair_key}:u{counterpart.user_id}")
 
         AuditLog.log(action='LF_REPORT_SUBMITTED', module='LOST_FOUND', user_id=user.id,
                      details=f"{report_type.upper()} report '{title}' at {location_reported}; {match_count} possible match(es).",

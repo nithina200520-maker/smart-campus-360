@@ -7,15 +7,20 @@ from app.utils.auth_helpers import login_required, get_current_user
 @notifications_bp.route('/')
 @login_required
 def index():
-    """PHASE 4: personal notification history (in-app only; no email dependency)."""
+    """PHASE 4/5: personal notification history (in-app only; no email dependency)."""
     user = get_current_user()
     only_unread = request.args.get('unread') == '1'
+    # Phase 5: history can be filtered by notification category
+    category = request.args.get('category')
     query = Notification.query.filter_by(user_id=user.id).order_by(Notification.created_at.desc())
     if only_unread:
         query = query.filter_by(is_read=False)
+    if category in ('match', 'claim', 'return', 'admin', 'system'):
+        query = query.filter_by(category=category)
     notifications = query.limit(200).all()
     return render_template('notifications/list.html', user=user,
-                           notifications=notifications, only_unread=only_unread)
+                           notifications=notifications, only_unread=only_unread,
+                           current_category=category)
 
 @notifications_bp.route('/mark-read/<int:note_id>', methods=['POST'])
 @login_required

@@ -30,6 +30,14 @@
     </div>
   </div>
 
+  {# PHASE 5: category filter chips for the notification history #}
+  <div class="d-flex flex-wrap gap-2 mb-4 small">
+    <a href="{{ url_for('notifications.index') }}{% if only_unread %}?unread=1{% endif %}" class="btn btn-sm rounded-pill {% if not current_category %}btn-dark{% else %}btn-outline-secondary{% endif %} text-uppercase fw-bold" style="font-size:0.72rem;">All</a>
+    {% for cat in ['match', 'claim', 'return', 'admin', 'system'] %}
+    <a href="{{ url_for('notifications.index') }}?{% if only_unread %}unread=1&{% endif %}category={{ cat }}" class="btn btn-sm rounded-pill {% if current_category == cat %}btn-dark{% else %}btn-outline-secondary{% endif %} text-uppercase fw-bold" style="font-size:0.72rem;">{{ cat }}</a>
+    {% endfor %}
+  </div>
+
   {% if notifications %}
   <div class="list-group shadow-sm">
     {% for note in notifications %}

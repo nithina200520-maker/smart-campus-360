@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS lost_found_items (
     date_time_reported DATETIME NOT NULL COMMENT 'Incident date and approximate time',
     description TEXT NOT NULL,
     photo_url VARCHAR(255) NULL COMMENT 'Photograph uploaded by reporter',
-    image_feature_vector MEDIUMTEXT NULL COMMENT 'JSON serialized {model, vector} embedding for AI similarity matching',
+    image_feature_vector MEDIUMTEXT NULL COMMENT 'JSON serialized {model, vector, pre} embedding for AI similarity matching',
     color_hint VARCHAR(30) NULL COMMENT 'Phase 4: dominant item colour for contextual ranking',
     status ENUM('open', 'matched', 'claimed', 'closed') NOT NULL DEFAULT 'open',
     contact_phone VARCHAR(20) NULL,
@@ -110,11 +110,14 @@ CREATE TABLE IF NOT EXISTS lost_found_items (
     claimed_by_user_id INT NULL,
     verified_by_admin_id INT NULL,
     collected_at DATETIME NULL,
+    is_duplicate BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Phase 5: same-user duplicate report flag',
+    duplicate_of_id INT NULL COMMENT 'Phase 5: earlier report this duplicate links to',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (claimed_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (verified_by_admin_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (duplicate_of_id) REFERENCES lost_found_items(id) ON DELETE SET NULL,
     INDEX idx_lf_type (report_type),
     INDEX idx_lf_status (status),
     INDEX idx_lf_category (category)
@@ -126,11 +129,15 @@ CREATE TABLE IF NOT EXISTS lost_found_matches (
     found_item_id INT NOT NULL,
     similarity_score FLOAT NOT NULL COMMENT 'Score between 0.0 and 1.0 calculated by AI matcher',
     composite_score FLOAT NULL COMMENT 'Phase 4: image + category/colour/date/location blend',
-    factors TEXT NULL COMMENT 'Phase 4: JSON breakdown of contextual signals',
+    factors TEXT NULL COMMENT 'Phase 4/5: JSON breakdown of contextual signals (Phase 5 adds text)',
     status ENUM('suggested', 'verified', 'rejected') NOT NULL DEFAULT 'suggested',
+    decided_by_admin_id INT NULL COMMENT 'Phase 5: Main Admin who confirmed/rejected the pairing',
+    decided_at DATETIME NULL,
+    rejected_reason VARCHAR(255) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (lost_item_id) REFERENCES lost_found_items(id) ON DELETE CASCADE,
     FOREIGN KEY (found_item_id) REFERENCES lost_found_items(id) ON DELETE CASCADE,
+    FOREIGN KEY (decided_by_admin_id) REFERENCES users(id) ON DELETE SET NULL,
     UNIQUE KEY uq_item_match (lost_item_id, found_item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -159,10 +166,12 @@ CREATE TABLE IF NOT EXISTS notifications (
     category ENUM('match', 'claim', 'return', 'admin', 'system') NOT NULL DEFAULT 'system',
     link_url VARCHAR(255) NULL,
     is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    dedup_key VARCHAR(120) NULL COMMENT 'Phase 5: idempotency key preventing duplicate alerts per match/event',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_notif_user (user_id),
-    INDEX idx_notif_read (is_read)
+    INDEX idx_notif_read (is_read),
+    UNIQUE KEY uq_notif_dedup (dedup_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------------------------

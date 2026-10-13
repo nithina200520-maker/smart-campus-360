@@ -66,6 +66,18 @@ class Config:
     # (privilege-escalation surface if left exposed in production)
     ALLOW_QUICK_SWITCH = False
 
+    # --- Phase 5: Lost & Found AI matcher thresholds (tunable, measurable) ---
+    # Minimum composite score for the engine to surface a suggested match at all
+    LF_MATCH_MIN_COMPOSITE = float(os.getenv("LF_MATCH_MIN_COMPOSITE", 0.35))
+    # Composite at/above which a suggestion is labelled a HIGH-confidence match
+    LF_STRONG_MATCH_SCORE = float(os.getenv("LF_STRONG_MATCH_SCORE", 0.70))
+    # Mid band boundary between 'medium' and 'possible' confidence
+    LF_MEDIUM_MATCH_SCORE = float(os.getenv("LF_MEDIUM_MATCH_SCORE", 0.50))
+    # Combined duplicate-report score at/above which a second report is flagged
+    LF_DUPLICATE_SCORE = float(os.getenv("LF_DUPLICATE_SCORE", 0.65))
+    # Number of ranked suggestions stored per new report
+    LF_MATCH_LIMIT = int(os.getenv("LF_MATCH_LIMIT", 10))
+
 class DevelopmentConfig(Config):
     DEBUG = True
     ALLOW_QUICK_SWITCH = os.getenv("ENABLE_QUICK_SWITCH", "True").lower() in ("true", "1", "t")

@@ -183,6 +183,9 @@ class LostFoundItem(db.Model):
     claimed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     verified_by_admin_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     collected_at = db.Column(db.DateTime, nullable=True)
+    # Phase 5: duplicate-report detection (same user re-reporting the same item)
+    is_duplicate = db.Column(db.Boolean, default=False, nullable=False)
+    duplicate_of_id = db.Column(db.Integer, db.ForeignKey('lost_found_items.id', ondelete='SET NULL'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -215,10 +218,15 @@ class LostFoundMatch(db.Model):
     composite_score = db.Column(db.Float, nullable=True) # Phase 4: image + category/colour/date/location blend
     factors = db.Column(db.Text, nullable=True) # Phase 4: JSON breakdown of contextual signals
     status = db.Column(db.String(20), default='suggested') # 'suggested', 'verified', 'rejected'
+    # Phase 5: Main Admin review decision on a suggested match
+    decided_by_admin_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    decided_at = db.Column(db.DateTime, nullable=True)
+    rejected_reason = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     lost_item = db.relationship('LostFoundItem', foreign_keys=[lost_item_id])
     found_item = db.relationship('LostFoundItem', foreign_keys=[found_item_id])
+    deciding_admin = db.relationship('User', foreign_keys=[decided_by_admin_id])
 
 
 class LostFoundClaim(db.Model):
@@ -251,16 +259,26 @@ class Notification(db.Model):
     category = db.Column(db.String(20), default='system') # 'match', 'claim', 'return', 'admin', 'system'
     link_url = db.Column(db.String(255), nullable=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
+    # Phase 5: idempotency key - the same logical event can never notify twice
+    # (NULL rows are legacy Phase 4 records and always allowed to coexist)
+    dedup_key = db.Column(db.String(120), nullable=True, unique=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', foreign_keys=[user_id], backref='notifications')
 
     @classmethod
-    def notify(cls, user_id, title, message, category='system', link_url=None):
-        """Create one targeted in-app notification (no commit - caller controls the transaction)."""
+    def notify(cls, user_id, title, message, category='system', link_url=None, dedup_key=None):
+        """
+        Create one targeted in-app notification (no commit - caller controls the transaction).
+        Phase 5: when a dedup_key is supplied, an already-recorded key is silently
+        skipped, preventing duplicate notifications for the same match/event.
+        """
         if not user_id:
             return None
-        note = cls(user_id=user_id, title=title, message=message, category=category, link_url=link_url)
+        if dedup_key and cls.query.filter_by(dedup_key=dedup_key).first():
+            return None
+        note = cls(user_id=user_id, title=title, message=message,
+                   category=category, link_url=link_url, dedup_key=dedup_key)
         db.session.add(note)
         return note
 
