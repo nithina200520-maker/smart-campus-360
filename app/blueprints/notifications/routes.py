@@ -15,7 +15,7 @@ def index():
     query = Notification.query.filter_by(user_id=user.id).order_by(Notification.created_at.desc())
     if only_unread:
         query = query.filter_by(is_read=False)
-    if category in ('match', 'claim', 'return', 'admin', 'system'):
+    if category in ('match', 'claim', 'return', 'admin', 'system', 'canteen'):
         query = query.filter_by(category=category)
     notifications = query.limit(200).all()
     return render_template('notifications/list.html', user=user,

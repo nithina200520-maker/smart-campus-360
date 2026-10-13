@@ -26,14 +26,17 @@ def index():
     day_start = datetime.combine(datetime.today(), time.min)
 
     # --- Core aggregate statistics across the integrated modules (live DB data) ---
-    classrooms_count = NavigationNode.query.filter_by(category='Classroom').count()
-    labs_count = NavigationNode.query.filter(
+    # Phase 9: public portal surfaces only PUBLISHED locations (Phase 8 flag), so the
+    # landing page, map, routing and admin directory all agree on what is live.
+    published_nodes = NavigationNode.query.filter_by(is_published=True)
+    classrooms_count = published_nodes.filter_by(category='Classroom').count()
+    labs_count = published_nodes.filter(
         NavigationNode.category.like('%Lab%')
     ).count()
 
     stats = {
         # Existing keys preserved (used elsewhere / tests)
-        "nodes_count": NavigationNode.query.count(),
+        "nodes_count": published_nodes.count(),
         "open_lost_found": LostFoundItem.query.filter_by(status='open').count(),
         "menu_items_count": CanteenItem.query.filter_by(is_available=True).count(),
         "active_orders_count": CanteenOrder.query.filter(
@@ -46,7 +49,7 @@ def index():
         "rooms_labs": classrooms_count + labs_count,
         "buildings_count": db.session.query(
             func.count(func.distinct(NavigationNode.building))
-        ).scalar() or 0,
+        ).filter(NavigationNode.is_published.is_(True)).scalar() or 0,
         # Lost & Found reporting stats
         "lf_total": LostFoundItem.query.count(),
         "lf_lost": LostFoundItem.query.filter_by(report_type='lost').count(),
@@ -121,12 +124,13 @@ def index():
     timeline.sort(key=lambda e: e["ts"] or datetime.min, reverse=True)
     today_events = timeline[:5]
 
-    # --- Quick Location Finder source list (real campus nodes) ---
+    # --- Quick Location Finder source list (real, published campus nodes) ---
     quick_locations = (
         db.session.query(
             NavigationNode.id, NavigationNode.name,
             NavigationNode.building, NavigationNode.category,
         )
+        .filter(NavigationNode.is_published.is_(True))
         .order_by(NavigationNode.building.asc(), NavigationNode.name.asc())
         .all()
     )

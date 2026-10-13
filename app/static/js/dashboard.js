@@ -47,6 +47,7 @@
       var toggle = dd.querySelector('[data-dd-toggle]');
       if (!toggle) return;
       toggle.addEventListener('click', function (ev) {
+        ev.preventDefault();
         ev.stopPropagation();
         var wasOpen = dd.classList.contains('open');
         document.querySelectorAll('.sc-dd.open').forEach(function (o) { o.classList.remove('open'); });
