@@ -39,14 +39,26 @@ def provision_admin(name=None, email=None, password=None, department="System Adm
         print("  Government Engineering College, Mosalehosahalli (Hassan)")
         print("=" * 65 + "\n")
 
-        # Interactive prompts if arguments not supplied
+        # Interactive prompts if arguments not supplied. Phase 10 fix: when all
+        # required flags (--name/--email/--password) are supplied the script runs
+        # fully headless; the OPTIONAL phone prompt no longer blocks CI/docker
+        # runs, and missing required values without a terminal fail fast.
+        automated = bool(name and email and password)
+        interactive = sys.stdin.isatty()
+
         if not name:
+            if not interactive:
+                print("[!] Error: --name is required in non-interactive mode.")
+                sys.exit(1)
             name = input("Enter Main Admin Full Name: ").strip()
             if not name:
                 print("[!] Error: Admin name cannot be empty.")
                 sys.exit(1)
 
         if not email:
+            if not interactive:
+                print("[!] Error: --email is required in non-interactive mode.")
+                sys.exit(1)
             email = input("Enter Main Admin Email (e.g. admin@gechassan.ac.in): ").strip().lower()
             if not email or "@" not in email:
                 print("[!] Error: A valid email address is required.")
@@ -55,6 +67,9 @@ def provision_admin(name=None, email=None, password=None, department="System Adm
             email = email.strip().lower()
 
         if not password:
+            if not interactive:
+                print("[!] Error: --password is required in non-interactive mode.")
+                sys.exit(1)
             while True:
                 password = getpass.getpass("Enter Secure Admin Password (min 8 chars): ")
                 if not validate_password_strength(password):
@@ -69,7 +84,8 @@ def provision_admin(name=None, email=None, password=None, department="System Adm
                 sys.exit(1)
 
         if not phone:
-            phone = input("Enter Contact Phone (optional): ").strip()
+            if not automated:
+                phone = input("Enter Contact Phone (optional): ").strip()
 
         # Check for existing user
         user = User.query.filter_by(email=email).first()

@@ -53,10 +53,11 @@ class TestCampusManagement:
         assert node.is_published is True  # newly added locations publish live
 
         # room information update + campus photograph replacement
+        # (Phase 10: uploads now require true image content, not just an extension)
         resp = client.post(f"/admin/navigation/node/{node.id}/update",
                            data={"name": "Robotics & AI Lab", "description": "Block P8, 1st floor",
                                  "x_coord": "15", "y_coord": "25", "is_accessible": "on",
-                                 "photo": (io.BytesIO(b"\x89PNG-fake-bytes"), "lab.png")},
+                                 "photo": (io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"-valid-test-body"), "lab.png")},
                            content_type="multipart/form-data")
         assert resp.status_code == 302
         db.session.refresh(node)

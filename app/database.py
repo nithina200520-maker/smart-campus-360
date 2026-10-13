@@ -1,11 +1,25 @@
 import logging
+import sqlite3
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.engine import Engine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 db = SQLAlchemy()
+
+
+@event.listens_for(Engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+    """Phase 10: SQLite switches OFF foreign key enforcement per connection by
+    default, which silently disables every ondelete=CASCADE constraint in the
+    models. Enable it on any SQLite connection so referential integrity and
+    cascades behave exactly as declared (no-op on MySQL)."""
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 def init_db_connection(app):
     """

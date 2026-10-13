@@ -13,8 +13,10 @@ from app.models import (
 )
 from app.database import db
 from app.utils.auth_helpers import role_required, get_current_user
+from app.utils.image_matcher import validate_image_bytes
 
 ALLOWED_PHOTO_EXT = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
+MAX_UPLOAD_PHOTO_BYTES = 8 * 1024 * 1024
 
 NODE_CSV_TEMPLATE = """node_code,name,building,floor,category,description,x_coord,y_coord,photo_url,is_panoramic,is_accessible,is_sample_data
 NODE_EXAMPLE_1,Sample Classroom 101,Academic Block A,Ground Floor,Classroom,Imported via Phase 3 template,420,300,,False,True,True
@@ -30,9 +32,18 @@ Academic Block A,Ground Floor,Block A Ground Floor Plan,/static/uploads/navigati
 """
 
 def _save_navigation_photo(file):
-    """Stores an uploaded navigation photograph under static/uploads/navigation and returns its web URL."""
+    """Stores an uploaded navigation photograph under static/uploads/navigation and returns its web URL.
+    Phase 10 SECURITY: same discipline as every other upload surface - true image content
+    (magic bytes) validation and an 8 MB cap, never the file extension alone."""
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
     if ext not in ALLOWED_PHOTO_EXT:
+        return None
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    if size > MAX_UPLOAD_PHOTO_BYTES:
+        return None
+    if not validate_image_bytes(file):
         return None
     filename = secure_filename(f"nav_{int(datetime.utcnow().timestamp())}_{file.filename}")
     upload_dir = Path(current_app.root_path) / "static" / "uploads" / "navigation"
@@ -366,7 +377,11 @@ def create_nav_node():
     photo_file = request.files.get('photo')
     photo_url = request.form.get('photo_url', '').strip() or None
     if photo_file and photo_file.filename:
-        photo_url = _save_navigation_photo(photo_file) or photo_url
+        saved_photo = _save_navigation_photo(photo_file)
+        if saved_photo:
+            photo_url = saved_photo
+        else:
+            flash("Photograph rejected: only real PNG/JPG/JPEG/WEBP/GIF images up to 8 MB are allowed.", "warning")
 
     node = NavigationNode(
         node_code=node_code,
@@ -426,6 +441,8 @@ def update_nav_node(node_id):
         saved = _save_navigation_photo(photo_file)
         if saved:
             node.photo_url = saved
+        else:
+            flash("Photograph rejected: only real PNG/JPG/JPEG/WEBP/GIF images up to 8 MB are allowed.", "warning")
 
     db.session.commit()
     AuditLog.log(action='NAV_NODE_UPDATED', module='NAVIGATION', user_id=user.id,
@@ -514,7 +531,11 @@ def create_floor_plan():
     image_url = request.form.get('image_url', '').strip() or None
     plan_file = request.files.get('plan_image')
     if plan_file and plan_file.filename:
-        image_url = _save_navigation_photo(plan_file) or image_url
+        saved_plan = _save_navigation_photo(plan_file)
+        if saved_plan:
+            image_url = saved_plan
+        else:
+            flash("Floor plan image rejected: only real PNG/JPG/JPEG/WEBP/GIF images up to 8 MB are allowed.", "warning")
 
     plan = CampusFloorPlan(
         building=building, floor=floor, title=title,
@@ -589,17 +610,20 @@ def import_navigation_data(kind=None):
                 skipped += 1
                 continue
             try:
-                db.session.add(NavigationNode(
-                    node_code=code, name=row['name'].strip(), building=row['building'].strip(),
-                    floor=(row.get('floor') or 'Ground Floor').strip(),
-                    category=(row.get('category') or 'Classroom').strip(),
-                    description=(row.get('description') or '').strip(),
-                    x_coord=int(row.get('x_coord') or 0), y_coord=int(row.get('y_coord') or 0),
-                    photo_url=(row.get('photo_url') or '').strip() or None,
-                    is_panoramic=_csv_row_to_bool(row.get('is_panoramic')),
-                    is_accessible=_csv_row_to_bool(row.get('is_accessible'), True),
-                    is_sample_data=_csv_row_to_bool(row.get('is_sample_data'), True)
-                ))
+                # Phase 10: per-row SAVEPOINT - one malformed or duplicated row
+                # can never abort (or half-commit) the whole import transaction.
+                with db.session.begin_nested():
+                    db.session.add(NavigationNode(
+                        node_code=code, name=row['name'].strip(), building=row['building'].strip(),
+                        floor=(row.get('floor') or 'Ground Floor').strip(),
+                        category=(row.get('category') or 'Classroom').strip(),
+                        description=(row.get('description') or '').strip(),
+                        x_coord=int(row.get('x_coord') or 0), y_coord=int(row.get('y_coord') or 0),
+                        photo_url=(row.get('photo_url') or '').strip() or None,
+                        is_panoramic=_csv_row_to_bool(row.get('is_panoramic')),
+                        is_accessible=_csv_row_to_bool(row.get('is_accessible'), True),
+                        is_sample_data=_csv_row_to_bool(row.get('is_sample_data'), True)
+                    ))
                 created += 1
             except Exception:
                 skipped += 1
@@ -612,13 +636,14 @@ def import_navigation_data(kind=None):
                 skipped += 1
                 continue
             try:
-                db.session.add(NavigationEdge(
-                    source_node_id=src, target_node_id=dst,
-                    distance_meters=float(row.get('distance_meters') or 15.0),
-                    direction_hint=(row.get('direction_hint') or '').strip() or None,
-                    is_bidirectional=_csv_row_to_bool(row.get('is_bidirectional'), True),
-                    is_sample_data=_csv_row_to_bool(row.get('is_sample_data'), True)
-                ))
+                with db.session.begin_nested():
+                    db.session.add(NavigationEdge(
+                        source_node_id=src, target_node_id=dst,
+                        distance_meters=float(row.get('distance_meters') or 15.0),
+                        direction_hint=(row.get('direction_hint') or '').strip() or None,
+                        is_bidirectional=_csv_row_to_bool(row.get('is_bidirectional'), True),
+                        is_sample_data=_csv_row_to_bool(row.get('is_sample_data'), True)
+                    ))
                 created += 1
             except Exception:
                 skipped += 1
@@ -629,12 +654,16 @@ def import_navigation_data(kind=None):
             if not building or not title:
                 skipped += 1
                 continue
-            db.session.add(CampusFloorPlan(
-                building=building, floor=(row.get('floor') or 'Ground Floor').strip(),
-                title=title, image_url=(row.get('image_url') or '').strip() or None,
-                is_sample_data=_csv_row_to_bool(row.get('is_sample_data'), True)
-            ))
-            created += 1
+            try:
+                with db.session.begin_nested():
+                    db.session.add(CampusFloorPlan(
+                        building=building, floor=(row.get('floor') or 'Ground Floor').strip(),
+                        title=title, image_url=(row.get('image_url') or '').strip() or None,
+                        is_sample_data=_csv_row_to_bool(row.get('is_sample_data'), True)
+                    ))
+                created += 1
+            except Exception:
+                skipped += 1
     else:
         flash("Unknown import type.", "danger")
         return redirect(url_for('admin.manage_navigation'))
