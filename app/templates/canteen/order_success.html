@@ -42,6 +42,7 @@
           <div class="small text-muted mt-2 fw-bold text-uppercase">
             <i class="fa-solid fa-mobile-screen me-1"></i> Present QR at Canteen Counter
           </div>
+          <div class="small text-muted">Single-use secure code &middot; contains no personal information</div>
         </div>
 
         <!-- Order Information Table -->
@@ -49,14 +50,21 @@
           <div class="row g-2 small">
             <div class="col-6 text-muted">Customer Name:</div>
             <div class="col-6 fw-bold text-end">{{ order.customer.full_name }} ({{ order.user_role_at_order.title() }})</div>
-            
+
             <div class="col-6 text-muted">Scheduled Pickup:</div>
-            <div class="col-6 fw-bold text-end text-primary">{{ order.pickup_time.strftime('%d %b %Y at %H:%M') }}</div>
+            <div class="col-6 fw-bold text-end text-primary">
+              {% if order.slot %}{{ order.slot.name }} · {{ order.slot.slot_date.strftime('%d %b %Y') }} at {{ order.slot.start_time }}{% else %}{{ order.pickup_time.strftime('%d %b %Y at %H:%M') }}{% endif %}
+            </div>
+
+            <div class="col-6 text-muted">Estimated Ready:</div>
+            <div class="col-6 fw-bold text-end text-dark">
+              {% if order.estimated_ready_at %}{{ order.estimated_ready_at.strftime('%d %b %Y, %H:%M') }}{% else %}- (after confirmation){% endif %}
+            </div>
 
             <div class="col-6 text-muted">Order Status:</div>
             <div class="col-6 fw-bold text-end text-uppercase">
-              <span class="badge {% if order.order_status == 'collected' %}bg-success{% elif order.order_status == 'ready' %}bg-info text-dark{% elif order.order_status == 'preparing' %}bg-warning text-dark{% else %}bg-primary{% endif %}">
-                {{ order.order_status }}
+              <span class="badge {% if order.order_status == 'collected' %}bg-success{% elif order.order_status == 'ready' %}bg-info text-dark{% elif order.order_status == 'preparing' %}bg-warning text-dark{% elif order.order_status in ['cancelled', 'refunded'] %}bg-danger{% elif 'refund' in order.order_status %}bg-secondary{% else %}bg-primary{% endif %}">
+                {{ order.status_label }}
               </span>
             </div>
 
@@ -65,6 +73,11 @@
 
             <div class="col-6 text-muted">Total Paid:</div>
             <div class="col-6 fw-bold text-end fs-6 text-dark">₹{{ "%.2f"|format(order.total_amount) }}</div>
+
+            {% if order.refund_reason %}
+            <div class="col-6 text-muted">Refund Note:</div>
+            <div class="col-6 fw-bold text-end">{{ order.refund_reason }}</div>
+            {% endif %}
           </div>
         </div>
 
@@ -90,10 +103,18 @@
             <i class="fa-solid fa-bowl-food me-1"></i> Order More Food
           </a>
 
-          {% if order.order_status in ['placed', 'preparing'] %}
+          {% if order.order_status in ['placed', 'pending', 'confirmed'] and order.user_id == current_user.id %}
           <form method="POST" action="{{ url_for('canteen.cancel_order', order_id=order.id) }}" onsubmit="return confirm('Are you sure you want to cancel this order and initiate a refund?');">
             <button type="submit" class="btn btn-outline-danger rounded-pill px-4">
               <i class="fa-solid fa-ban me-1"></i> Cancel & Refund
+            </button>
+          </form>
+          {% endif %}
+
+          {% if order.order_status in ['confirmed', 'preparing', 'ready'] and order.user_id == current_user.id %}
+          <form method="POST" action="{{ url_for('canteen.request_refund', order_id=order.id) }}" onsubmit="return confirm('Request a refund for this order? The canteen team will process it.');">
+            <button type="submit" class="btn btn-outline-warning rounded-pill px-4">
+              <i class="fa-solid fa-hand-holding-dollar me-1"></i> Request Refund
             </button>
           </form>
           {% endif %}

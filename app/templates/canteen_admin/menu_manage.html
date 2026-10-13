@@ -24,19 +24,27 @@
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
             <tr>
-              <th class="ps-4">Item Name</th>
+              <th class="ps-4">Photo</th>
+              <th>Item Name</th>
               <th>Category</th>
               <th>Price</th>
               <th>Stock</th>
               <th>Prep Time</th>
               <th>Availability</th>
-              <th class="pe-4 text-end">Toggle</th>
+              <th class="pe-4 text-end">Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for item in items %}
             <tr>
               <td class="ps-4">
+                {% if item.photo_url %}
+                  <img src="{{ item.photo_url }}" alt="{{ item.name }}" style="width: 52px; height: 52px; object-fit: cover; border-radius: 10px;">
+                {% else %}
+                  <span class="bg-light border rounded d-inline-flex align-items-center justify-content-center text-muted" style="width: 52px; height: 52px;"><i class="fa-solid fa-image"></i></span>
+                {% endif %}
+              </td>
+              <td>
                 <div class="fw-bold text-dark">{{ item.name }}</div>
                 <div class="small text-muted text-truncate" style="max-width: 280px;">{{ item.description or '-' }}</div>
               </td>
@@ -56,6 +64,9 @@
                 {% endif %}
               </td>
               <td class="pe-4 text-end">
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" data-bs-toggle="modal" data-bs-target="#editItem{{ item.id }}">
+                  <i class="fa-solid fa-pen me-1"></i> Edit
+                </button>
                 <form method="POST" action="{{ url_for('canteen_admin.toggle_item', item_id=item.id) }}" class="d-inline">
                   {% if item.is_available %}
                     <button type="submit" class="btn btn-sm btn-outline-danger">Mark Sold Out</button>
@@ -65,6 +76,64 @@
                 </form>
               </td>
             </tr>
+
+            <!-- Phase 6: Edit Item Modal -->
+            <div class="modal fade" id="editItem{{ item.id }}" tabindex="-1">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <form method="POST" action="{{ url_for('canteen_admin.item_edit', item_id=item.id) }}" enctype="multipart/form-data">
+                    <div class="modal-header">
+                      <h5 class="modal-title fw-bold">Edit: {{ item.name }}</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                      <div class="mb-3">
+                        <label class="form-label fw-bold small">Dish Name</label>
+                        <input type="text" name="name" class="form-control" value="{{ item.name }}" required>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label fw-bold small">Category</label>
+                        <select name="category_id" class="form-select">
+                          {% for c in categories %}
+                            <option value="{{ c.id }}" {% if item.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <div class="row g-2 mb-3">
+                        <div class="col-4">
+                          <label class="form-label fw-bold small">Price (₹)</label>
+                          <input type="number" step="0.5" min="0" name="price" class="form-control" value="{{ '%.2f'|format(item.price) }}">
+                        </div>
+                        <div class="col-4">
+                          <label class="form-label fw-bold small">Stock</label>
+                          <input type="number" min="0" name="stock_quantity" class="form-control" value="{{ item.stock_quantity }}">
+                        </div>
+                        <div class="col-4">
+                          <label class="form-label fw-bold small">Prep (min)</label>
+                          <input type="number" min="1" name="preparation_time_mins" class="form-control" value="{{ item.preparation_time_mins }}">
+                        </div>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label fw-bold small">Description</label>
+                        <textarea name="description" class="form-control" rows="2">{{ item.description or '' }}</textarea>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label fw-bold small">Replace Photo (PNG/JPG/WEBP, ≤ 8 MB)</label>
+                        <input type="file" name="photo" accept=".png,.jpg,.jpeg,.webp" class="form-control">
+                      </div>
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="is_available" value="1" id="avail{{ item.id }}" {% if item.is_available %}checked{% endif %}>
+                        <label class="form-check-label small" for="avail{{ item.id }}">Available for order</label>
+                      </div>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                      <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
             {% endfor %}
           </tbody>
         </table>
@@ -78,7 +147,7 @@
 <div class="modal fade" id="addItemModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <form method="POST" action="{{ url_for('canteen_admin.menu_manage') }}">
+      <form method="POST" action="{{ url_for('canteen_admin.menu_manage') }}" enctype="multipart/form-data">
         <input type="hidden" name="action" value="add_item">
         <div class="modal-header">
           <h5 class="modal-title fw-bold">Add Menu Dish</h5>
@@ -98,14 +167,22 @@
             </select>
           </div>
           <div class="row g-2 mb-3">
-            <div class="col-6">
+            <div class="col-4">
               <label class="form-label fw-bold small">Price (₹)</label>
               <input type="number" step="0.5" name="price" class="form-control" placeholder="40.00" required>
             </div>
-            <div class="col-6">
+            <div class="col-4">
               <label class="form-label fw-bold small">Initial Stock</label>
               <input type="number" name="stock_quantity" class="form-control" value="50" required>
             </div>
+            <div class="col-4">
+              <label class="form-label fw-bold small">Prep (min)</label>
+              <input type="number" min="1" name="preparation_time_mins" class="form-control" value="10">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Dish Photo (PNG/JPG/WEBP, ≤ 8 MB)</label>
+            <input type="file" name="photo" accept=".png,.jpg,.jpeg,.webp" class="form-control">
           </div>
           <div class="mb-3">
             <label class="form-label fw-bold small">Description</label>

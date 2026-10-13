@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.database import db
 
@@ -256,7 +256,7 @@ class Notification(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     title = db.Column(db.String(150), nullable=False)
     message = db.Column(db.Text, nullable=False)
-    category = db.Column(db.String(20), default='system') # 'match', 'claim', 'return', 'admin', 'system'
+    category = db.Column(db.String(20), default='system') # 'match', 'claim', 'return', 'canteen', 'admin', 'system'
     link_url = db.Column(db.String(255), nullable=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     # Phase 5: idempotency key - the same logical event can never notify twice
@@ -338,6 +338,46 @@ class CanteenItem(db.Model):
         }
 
 
+class CanteenPickupSlot(db.Model):
+    """Phase 6: configurable canteen pickup slots with per-slot order capacity."""
+    __tablename__ = 'canteen_pickup_slots'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)          # e.g. "Lunch Break"
+    slot_date = db.Column(db.Date, nullable=False, index=True)
+    start_time = db.Column(db.String(5), nullable=False)       # 'HH:MM'
+    end_time = db.Column(db.String(5), nullable=False)         # 'HH:MM'
+    order_capacity = db.Column(db.Integer, nullable=False, default=50)  # max orders
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    is_sample_data = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def starts_at(self) -> datetime:
+        """Combined date + start time as a naive local datetime."""
+        hour, minute = (int(p) for p in self.start_time.split(':'))
+        return datetime.combine(self.slot_date, datetime.min.time()).replace(hour=hour, minute=minute)
+
+    @property
+    def ends_at(self) -> datetime:
+        hour, minute = (int(p) for p in self.end_time.split(':'))
+        return datetime.combine(self.slot_date, datetime.min.time()).replace(hour=hour, minute=minute)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "slot_date": self.slot_date.strftime('%Y-%m-%d'),
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "order_capacity": self.order_capacity,
+            "is_active": self.is_active,
+        }
+
+    def __repr__(self):
+        return f"<CanteenPickupSlot {self.name} {self.slot_date} {self.start_time}-{self.end_time}>"
+
+
 class CanteenOrder(db.Model):
     """
     Canteen pre-orders with Teacher-First Priority queue handling and QR code generation.
@@ -351,8 +391,15 @@ class CanteenOrder(db.Model):
     is_priority = db.Column(db.Boolean, default=False, nullable=False, index=True) # True for teachers
     total_amount = db.Column(db.Numeric(8, 2), nullable=False, default=0.00)
     pickup_time = db.Column(db.DateTime, nullable=False)
-    order_status = db.Column(db.String(20), nullable=False, default='placed', index=True)
-    # Statuses: 'placed', 'preparing', 'ready', 'collected', 'cancelled', 'refunded'
+    # Phase 6: slot booking + secure tokenized pickup QR
+    slot_id = db.Column(db.Integer, db.ForeignKey('canteen_pickup_slots.id', ondelete='SET NULL'), nullable=True, index=True)
+    pickup_token = db.Column(db.String(64), nullable=True, unique=True)  # opaque QR secret
+    estimated_ready_at = db.Column(db.DateTime, nullable=True)           # realistic queue estimate
+    confirmed_at = db.Column(db.DateTime, nullable=True)
+    order_status = db.Column(db.String(24), nullable=False, default='placed', index=True)
+    # Phase 6 statuses: 'pending', 'confirmed', 'preparing', 'ready', 'collected',
+    # 'cancelled', 'refund_requested', 'refund_processing', 'refunded'
+    # ('placed' remains valid for pre-Phase-6 legacy records and is shown as Pending)
     payment_status = db.Column(db.String(20), nullable=False, default='paid') # 'pending', 'paid', 'refunded'
     payment_method = db.Column(db.String(30), default='upi_simulation')
     qr_code_path = db.Column(db.String(255), nullable=True)
@@ -362,6 +409,25 @@ class CanteenOrder(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     items = db.relationship('CanteenOrderItem', backref='order', lazy=True, cascade="all, delete-orphan")
+    slot = db.relationship('CanteenPickupSlot', backref='orders', lazy=True)
+
+    # Phase 6: customer-facing labels for every lifecycle state
+    STATUS_LABELS = {
+        'placed': 'Pending',
+        'pending': 'Pending',
+        'confirmed': 'Confirmed',
+        'preparing': 'Preparing',
+        'ready': 'Ready for Pickup',
+        'collected': 'Collected',
+        'cancelled': 'Cancelled',
+        'refund_requested': 'Refund Requested',
+        'refund_processing': 'Refund Processing',
+        'refunded': 'Refunded',
+    }
+
+    @property
+    def status_label(self) -> str:
+        return self.STATUS_LABELS.get(self.order_status, self.order_status.title())
 
     def to_dict(self):
         return {
@@ -373,7 +439,10 @@ class CanteenOrder(db.Model):
             "is_priority": self.is_priority,
             "total_amount": float(self.total_amount),
             "pickup_time": self.pickup_time.strftime('%Y-%m-%d %H:%M') if self.pickup_time else None,
+            "slot_id": self.slot_id,
+            "estimated_ready_at": self.estimated_ready_at.strftime('%Y-%m-%d %H:%M') if self.estimated_ready_at else None,
             "order_status": self.order_status,
+            "status_label": self.status_label,
             "payment_status": self.payment_status,
             "payment_method": self.payment_method,
             "qr_code_path": self.qr_code_path,

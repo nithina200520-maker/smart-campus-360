@@ -38,17 +38,55 @@
     </div>
   </div>
 
+  <!-- Phase 6: Search & Filter -->
+  <form method="GET" action="{{ url_for('canteen.index') }}" class="card campus-card border-0 shadow-sm p-3 mb-4">
+    <div class="row g-2 align-items-center">
+      <div class="col-md-5">
+        <div class="input-group">
+          <span class="input-group-text bg-light"><i class="fa-solid fa-magnifying-glass"></i></span>
+          <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search dishes (e.g. dosa, coffee)...">
+        </div>
+      </div>
+      <div class="col-md-3">
+        <select name="category" class="form-select">
+          <option value="">All Categories</option>
+          {% for c in categories %}
+            <option value="{{ c.id }}" {% if selected_category == c.id %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="sort" class="form-select">
+          <option value="default" {% if sort == 'default' %}selected{% endif %}>Sort: Default</option>
+          <option value="price_asc" {% if sort == 'price_asc' %}selected{% endif %}>Price: Low → High</option>
+          <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>Price: High → Low</option>
+          <option value="name" {% if sort == 'name' %}selected{% endif %}>Name A-Z</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary rounded-pill flex-grow-1">Filter</button>
+        {% if q or selected_category or sort != 'default' %}
+        <a href="{{ url_for('canteen.index') }}" class="btn btn-outline-secondary rounded-pill" title="Clear filters"><i class="fa-solid fa-xmark"></i></a>
+        {% endif %}
+      </div>
+    </div>
+    {% if q or selected_category %}
+    <div class="small text-muted mt-2">{{ result_count }} dish{{ 'es' if result_count != 1 else '' }} found{% if q %} for "<strong>{{ q }}</strong>"{% endif %}</div>
+    {% endif %}
+  </form>
+
   <!-- Categories & Dishes -->
-  {% for cat in categories %}
+  {% for section in menu_sections %}
+  {% set cat = section.category %}
   <div class="mb-5">
     <div class="d-flex align-items-center gap-2 mb-3">
       <i class="fa-solid fa-utensils text-danger"></i>
       <h4 class="fw-bold text-dark mb-0">{{ cat.name }}</h4>
-      <span class="badge bg-light text-secondary border">{{ cat.items|length }} Items</span>
+      <span class="badge bg-light text-secondary border">{{ section.dishes|length }} Items</span>
     </div>
 
     <div class="row g-4">
-      {% for item in cat.items %}
+      {% for item in section.dishes %}
       <div class="col-md-6 col-lg-4 col-xl-3">
         <div class="card campus-card h-100 border-0 shadow-sm">
           
@@ -108,6 +146,13 @@
       </div>
       {% endfor %}
     </div>
+  </div>
+  {% else %}
+  <div class="text-center py-5">
+    <i class="fa-solid fa-bowl-food fa-3x text-muted mb-3 d-block"></i>
+    <h5 class="fw-bold text-dark">No dishes match your search</h5>
+    <p class="text-muted small">Try a different keyword or clear the filters.</p>
+    <a href="{{ url_for('canteen.index') }}" class="btn btn-outline-primary rounded-pill">Show Full Menu</a>
   </div>
   {% endfor %}
 

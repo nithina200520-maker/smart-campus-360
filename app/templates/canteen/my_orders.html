@@ -41,6 +41,9 @@
               <td>
                 <div class="fw-bold text-dark">{{ o.pickup_time.strftime('%H:%M') }}</div>
                 <div class="small text-muted">{{ o.pickup_time.strftime('%d %b %Y') }}</div>
+                {% if o.estimated_ready_at %}
+                <div class="small text-primary"><i class="fa-solid fa-hourglass-half me-1"></i>Ready ~{{ o.estimated_ready_at.strftime('%H:%M') }}</div>
+                {% endif %}
               </td>
               <td>{{ o.items|length }} item(s)</td>
               <td>
@@ -52,8 +55,8 @@
               </td>
               <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}</td>
               <td>
-                <span class="badge {% if o.order_status == 'collected' %}bg-success{% elif o.order_status == 'ready' %}bg-info text-dark{% elif o.order_status == 'preparing' %}bg-warning text-dark{% elif o.order_status == 'cancelled' or o.order_status == 'refunded' %}bg-danger{% else %}bg-primary{% endif %} text-uppercase">
-                  {{ o.order_status }}
+                <span class="badge {% if o.order_status == 'collected' %}bg-success{% elif o.order_status == 'ready' %}bg-info text-dark{% elif o.order_status == 'preparing' %}bg-warning text-dark{% elif o.order_status == 'confirmed' %}bg-primary{% elif o.order_status in ['cancelled', 'refunded'] %}bg-danger{% elif 'refund' in o.order_status %}bg-secondary{% else %}bg-secondary{% endif %} text-uppercase">
+                  {{ o.status_label }}
                 </span>
               </td>
               <td class="pe-4 text-end">

@@ -1,26 +1,50 @@
 import os
 import io
 import base64
-import json
 import qrcode
 from pathlib import Path
 from flask import current_app
 
+# Phase 6: QR pickup payload format. The code alone identifies the order; the
+# opaque per-order token is the secret that authorizes handover. No customer
+# name, user id, role, or amount is ever encoded in the QR image.
+PICKUP_PREFIX = "SC360-PICKUP"
+
+def pickup_qr_payload(order) -> str:
+    """Build the privacy-safe QR payload for one order."""
+    token = getattr(order, "pickup_token", None)
+    if token:
+        return f"{PICKUP_PREFIX}:{order.order_code}:{token}"
+    # Legacy orders created before Phase 6 have no token; verification then
+    # falls back to the plain order code exactly as before.
+    return f"{PICKUP_PREFIX}:{order.order_code}"
+
+def parse_pickup_payload(text: str):
+    """
+    Parse a scanned QR string into (order_code, token_or_None).
+    Returns (None, None) for anything not shaped like a pickup payload.
+    Accepts a bare order code too (manual entry path).
+    """
+    if not text:
+        return None, None
+    text = text.strip()
+    if text.startswith(PICKUP_PREFIX + ":"):
+        parts = text.split(":")
+        if len(parts) == 3 and parts[1]:
+            return parts[1].upper(), parts[2]
+        if len(parts) == 2 and parts[1]:
+            return parts[1].upper(), None
+        return None, None
+    # Manual entry / legacy scanner: plain order code
+    return text.upper(), None
+
 def generate_order_qr(order, save_to_disk=True) -> str:
     """
-    Generates a high-resolution QR code encoding order verification data.
-    Returns the relative web path e.g. 'uploads/qr_codes/ORD-XXXX.png'
-    and optionally writes it to the app's upload directory.
+    Generates a high-resolution QR code encoding the privacy-safe pickup
+    payload for one order. Returns the relative web path e.g.
+    'uploads/qr_codes/ORD-XXXX.png' and optionally writes it to disk.
     """
-    payload = {
-        "order_code": order.order_code,
-        "user_id": order.user_id,
-        "role": order.user_role_at_order,
-        "is_priority": bool(order.is_priority),
-        "total_amount": float(order.total_amount),
-        "pickup_time": order.pickup_time.strftime('%Y-%m-%d %H:%M') if order.pickup_time else None,
-        "college": "GEC Mosalehosahalli"
-    }
+    payload = pickup_qr_payload(order)
 
     qr = qrcode.QRCode(
         version=1,
@@ -28,7 +52,7 @@ def generate_order_qr(order, save_to_disk=True) -> str:
         box_size=10,
         border=3,
     )
-    qr.add_data(json.dumps(payload))
+    qr.add_data(payload)
     qr.make(fit=True)
 
     img = qr.make_image(fill_color="#1e293b", back_color="#ffffff")

@@ -8,18 +8,52 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <div>
       <span class="badge bg-success text-uppercase px-3 py-1 rounded-pill mb-1">
-        <i class="fa-solid fa-utensils me-1"></i> Canteen Operations
+        <i class="fa-solid fa-utensils me-1"></i> Canteen Operations · Phase 6
       </span>
       <h2 class="fw-bold text-dark mb-0">Live Kitchen & Preparation Queue</h2>
-      <p class="text-muted small mb-0">Automated Teacher-First Priority scheduling and rapid pickup verification</p>
+      <p class="text-muted small mb-0">Configurable teacher-first allocation, slot capacity, refund workflow, and secure QR pickup</p>
     </div>
-    <div class="d-flex gap-2 mt-2 mt-md-0">
+    <div class="d-flex gap-2 mt-2 mt-md-0 flex-wrap">
       <a href="{{ url_for('canteen_admin.menu_manage') }}" class="btn btn-outline-success rounded-pill">
-        <i class="fa-solid fa-bars-progress me-1"></i> Manage Menu & Stock
+        <i class="fa-solid fa-bars-progress me-1"></i> Menu & Stock
+      </a>
+      <a href="{{ url_for('canteen_admin.manage_slots') }}" class="btn btn-outline-primary rounded-pill">
+        <i class="fa-solid fa-clock me-1"></i> Pickup Slots
+      </a>
+      <a href="{{ url_for('canteen_admin.reports') }}" class="btn btn-outline-dark rounded-pill">
+        <i class="fa-solid fa-chart-column me-1"></i> Reports
       </a>
       <a href="{{ url_for('canteen.index') }}" class="btn btn-outline-secondary rounded-pill">
-        <i class="fa-solid fa-eye me-1"></i> View Customer Menu
+        <i class="fa-solid fa-eye me-1"></i> Customer Menu
       </a>
+    </div>
+  </div>
+
+  <!-- Live Metrics -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="card campus-card border-0 shadow-sm text-center py-3">
+        <div class="fs-4 fw-bold text-primary">{{ orders_today }}</div>
+        <div class="small text-muted text-uppercase">Orders Today</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card campus-card border-0 shadow-sm text-center py-3">
+        <div class="fs-4 fw-bold text-warning">{{ pending_count }}</div>
+        <div class="small text-muted text-uppercase">Awaiting Confirmation</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card campus-card border-0 shadow-sm text-center py-3">
+        <div class="fs-4 fw-bold text-danger">{{ refund_count }}</div>
+        <div class="small text-muted text-uppercase">Refund Queue</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card campus-card border-0 shadow-sm text-center py-3">
+        <div class="fs-4 fw-bold text-success">₹{{ "%.2f"|format(total_sales) }}</div>
+        <div class="small text-muted text-uppercase">Paid Volume</div>
+      </div>
     </div>
   </div>
 
@@ -27,19 +61,19 @@
   <div class="alert alert-teacher-priority d-flex align-items-center shadow-sm rounded-4 mb-4" role="alert">
     <i class="fa-solid fa-crown fa-2x me-3"></i>
     <div>
-      <strong>Teacher-First Priority Queue Protocol Active:</strong> 
-      Orders placed by faculty members (<span class="badge badge-teacher-priority">TEACHER PRIORITY</span>) are automatically sorted to the top of the kitchen preparation line to ensure prompt service.
+      <strong>Teacher-First Allocation Active:</strong>
+      Verified faculty orders (<span class="badge badge-teacher-priority">TEACHER PRIORITY</span>) sort to the top of the kitchen line and may hold a configurable share of each slot's capacity. Unused reserved seats open to students when the slot starts.
     </div>
   </div>
 
   <div class="row g-4 mb-4">
-    
+
     <!-- Left Column: Live Queue -->
     <div class="col-lg-8">
       <div class="card campus-card border-0 shadow-sm mb-4">
         <div class="campus-card-header bg-white d-flex justify-content-between align-items-center">
           <span class="fw-bold text-dark"><i class="fa-solid fa-list-check text-primary me-2"></i>Active Orders Queue ({{ active_orders|length }})</span>
-          <span class="badge bg-primary rounded-pill">Real-Time Refresh</span>
+          <span class="badge bg-primary rounded-pill">Teacher-First Sorted</span>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
@@ -49,7 +83,7 @@
                   <th class="ps-4">Order Code</th>
                   <th>Customer</th>
                   <th>Priority</th>
-                  <th>Pickup Time</th>
+                  <th>Slot / Pickup</th>
                   <th>Amount</th>
                   <th>Status</th>
                   <th class="pe-4 text-end">Action</th>
@@ -57,7 +91,7 @@
               </thead>
               <tbody>
                 {% for o in active_orders %}
-                <tr class="{% if o.is_priority %}table-warning table-opacity-25{% endif %}">
+                <tr class="{% if o.is_priority %}table-warning table-opacity-25{% elif 'refund' in o.order_status %}table-secondary{% endif %}">
                   <td class="ps-4">
                     <span class="fw-bold font-monospace text-primary">#{{ o.order_code }}</span>
                   </td>
@@ -74,17 +108,23 @@
                   </td>
                   <td>
                     <div class="fw-bold text-dark">{{ o.pickup_time.strftime('%H:%M') }}</div>
-                    <div class="small text-muted">{{ o.pickup_time.strftime('%d %b') }}</div>
+                    <div class="small text-muted">
+                      {% if o.slot %}{{ o.slot.name }} · {{ o.slot.slot_date.strftime('%d %b') }}{% else %}{{ o.pickup_time.strftime('%d %b') }}{% endif %}
+                    </div>
+                    {% if o.estimated_ready_at %}<div class="small text-primary">Ready ~{{ o.estimated_ready_at.strftime('%H:%M') }}</div>{% endif %}
                   </td>
                   <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}</td>
                   <td>
-                    <span class="badge {% if o.order_status == 'placed' %}bg-primary{% elif o.order_status == 'preparing' %}bg-warning text-dark{% elif o.order_status == 'ready' %}bg-info text-dark{% else %}bg-secondary{% endif %} text-uppercase">
-                      {{ o.order_status }}
+                    <span class="badge {% if o.order_status == 'ready' %}bg-info text-dark{% elif o.order_status == 'preparing' %}bg-warning text-dark{% elif o.order_status == 'confirmed' %}bg-success{% elif 'refund' in o.order_status %}bg-secondary{% else %}bg-primary{% endif %} text-uppercase">
+                      {{ o.status_label }}
                     </span>
                   </td>
                   <td class="pe-4 text-end">
                     <form method="POST" action="{{ url_for('canteen_admin.update_order_status', order_id=o.id) }}" class="d-inline">
-                      {% if o.order_status == 'placed' %}
+                      {% if o.order_status in ['placed', 'pending'] %}
+                        <input type="hidden" name="new_status" value="confirmed">
+                        <button type="submit" class="btn btn-sm btn-success rounded-pill px-3">Confirm</button>
+                      {% elif o.order_status == 'confirmed' %}
                         <input type="hidden" name="new_status" value="preparing">
                         <button type="submit" class="btn btn-sm btn-warning rounded-pill px-3">Start Prep</button>
                       {% elif o.order_status == 'preparing' %}
@@ -93,6 +133,15 @@
                       {% elif o.order_status == 'ready' %}
                         <input type="hidden" name="new_status" value="collected">
                         <button type="submit" class="btn btn-sm btn-success rounded-pill px-3">Mark Collected</button>
+                      {% elif o.order_status == 'refund_requested' %}
+                        <input type="hidden" name="new_status" value="refund_processing">
+                        <button type="submit" class="btn btn-sm btn-dark rounded-pill px-3">Process Refund</button>
+                      {% elif o.order_status == 'refund_processing' %}
+                        <input type="hidden" name="new_status" value="refunded">
+                        <button type="submit" class="btn btn-sm btn-danger rounded-pill px-3">Mark Refunded</button>
+                      {% endif %}
+                      {% if o.order_status in ['confirmed'] %}
+                      <a href="{{ url_for('canteen.order_detail', order_code=o.order_code) }}" class="btn btn-sm btn-outline-secondary rounded-pill" title="View order"><i class="fa-solid fa-eye"></i></a>
                       {% endif %}
                     </form>
                   </td>
@@ -114,7 +163,7 @@
       <!-- Completed Orders -->
       <div class="card campus-card border-0 shadow-sm">
         <div class="campus-card-header bg-white">
-          <span class="fw-bold text-dark"><i class="fa-solid fa-clock-rotate-left text-secondary me-2"></i>Recently Completed / Collected Orders</span>
+          <span class="fw-bold text-dark"><i class="fa-solid fa-clock-rotate-left text-secondary me-2"></i>Recently Completed / Closed Orders</span>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
@@ -135,8 +184,8 @@
                   <td>{{ o.customer.full_name }} ({{ o.user_role_at_order }})</td>
                   <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}</td>
                   <td>
-                    <span class="badge {% if o.order_status == 'collected' %}bg-success{% elif o.order_status == 'refunded' %}bg-danger{% else %}bg-secondary{% endif %}">
-                      {{ o.order_status|upper }}
+                    <span class="badge {% if o.order_status == 'collected' %}bg-success{% elif o.order_status in ['refunded', 'cancelled'] %}bg-danger{% else %}bg-secondary{% endif %}">
+                      {{ o.status_label|upper }}
                     </span>
                   </td>
                   <td class="text-muted">{{ o.collected_at.strftime('%Y-%m-%d %H:%M') if o.collected_at else '-' }}</td>
@@ -153,27 +202,57 @@
       </div>
     </div>
 
-    <!-- Right Column: QR Verification & Quick Metrics -->
+    <!-- Right Column: QR Verification, Slots & Quick Metrics -->
     <div class="col-lg-4">
-      
+
       <!-- Instant Pickup Verification -->
       <div class="card campus-card border-0 shadow-sm mb-4">
         <div class="campus-card-header bg-white">
-          <span class="fw-bold text-dark"><i class="fa-solid fa-qrcode text-primary me-2"></i>Pickup QR Code Verification</span>
+          <span class="fw-bold text-dark"><i class="fa-solid fa-qrcode text-primary me-2"></i>Pickup QR Verification</span>
         </div>
         <div class="card-body p-4">
           <p class="small text-muted mb-3">
-            Scan the customer's QR code with a barcode scanner or manually enter the Order Code to verify pickup.
+            Scan the customer's QR (paste the scanned code) or type the Order Code. The secure token is validated on the server and each code redeems only once.
           </p>
           <form method="POST" action="{{ url_for('canteen_admin.verify_pickup') }}">
             <div class="input-group mb-3">
               <span class="input-group-text bg-light"><i class="fa-solid fa-barcode"></i></span>
-              <input type="text" name="order_code" class="form-control text-uppercase" placeholder="ORD-20261012-XXXX" required>
+              <input type="text" name="order_code" class="form-control font-monospace" placeholder="SC360-PICKUP:ORD-... or ORD-..." required>
             </div>
             <button type="submit" class="btn btn-primary rounded-pill w-100 fw-bold">
               <i class="fa-solid fa-check-double me-1"></i> Verify & Handover
             </button>
           </form>
+        </div>
+      </div>
+
+      <!-- Slot Capacity Strip -->
+      <div class="card campus-card border-0 shadow-sm mb-4">
+        <div class="campus-card-header bg-white d-flex justify-content-between align-items-center">
+          <span class="fw-bold text-dark"><i class="fa-solid fa-clock text-primary me-2"></i>Upcoming Slot Capacity</span>
+          <a href="{{ url_for('canteen_admin.manage_slots') }}" class="btn btn-xs btn-outline-primary">Configure</a>
+        </div>
+        <div class="card-body p-3">
+          {% if open_slots %}
+          <div class="list-group list-group-flush">
+            {% for info in open_slots %}
+            {% set slot = info.slot %}
+            <div class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+              <div>
+                <div class="fw-bold text-dark small">{{ slot.name }} · {{ slot.slot_date.strftime('%d %b') }}</div>
+                <div class="small text-muted">{{ slot.start_time }}–{{ slot.end_time }} · {{ info.teacher_booked }} teacher / {{ info.booked }} total</div>
+              </div>
+              <span class="badge {% if info.remaining == 0 %}bg-danger{% elif info.remaining <= 5 %}bg-warning text-dark{% else %}bg-success{% endif %} rounded-pill">
+                {{ info.remaining }}/{{ info.capacity }} left
+              </span>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="text-center text-muted py-3 small">
+            No upcoming pickup slots. <a href="{{ url_for('canteen_admin.manage_slots') }}">Create slots</a> so customers can pre-book.
+          </div>
+          {% endif %}
         </div>
       </div>
 

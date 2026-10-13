@@ -46,7 +46,14 @@
                   <div class="small text-muted">{{ ci.item.category_rel.name }}</div>
                 </td>
                 <td>₹{{ "%.2f"|format(ci.item.price) }}</td>
-                <td><span class="badge bg-light text-dark border px-2 py-1">{{ ci.quantity }}</span></td>
+                <td>
+                  <form method="POST" action="{{ url_for('canteen.update_cart_quantity') }}" class="d-flex align-items-center gap-1">
+                    <input type="hidden" name="item_id" value="{{ ci.item.id }}">
+                    <input type="number" name="quantity" value="{{ ci.quantity }}" min="0" max="{{ ci.item.stock_quantity }}" class="form-control form-control-sm" style="width: 70px;">
+                    <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill" title="Update quantity"><i class="fa-solid fa-check"></i></button>
+                  </form>
+                  <div class="small text-muted">max {{ ci.item.stock_quantity }} in stock</div>
+                </td>
                 <td class="fw-bold text-success">₹{{ "%.2f"|format(ci.total) }}</td>
                 <td class="text-end">
                   <form method="POST" action="{{ url_for('canteen.remove_from_cart', item_id=ci.item.id) }}">
@@ -106,13 +113,43 @@
 
         <form method="POST" action="{{ url_for('canteen.checkout') }}">
           
-          <!-- Scheduled Pickup Time -->
+          <!-- Phase 6: Pickup Slot Selection -->
           <div class="mb-3">
             <label class="form-label fw-bold small text-secondary">
-              <i class="fa-solid fa-clock text-primary me-1"></i> Scheduled Pickup Time <span class="text-danger">*</span>
+              <i class="fa-solid fa-clock text-primary me-1"></i> Pickup Slot <span class="text-danger">*</span>
             </label>
+            {% if slot_options %}
+            <div class="list-group" style="max-height: 240px; overflow-y: auto;">
+              {% for opt in slot_options %}
+              {% set slot = opt.slot %}
+              <label class="list-group-item d-flex justify-content-between align-items-center {% if not opt.allowed %}list-group-item-light text-muted{% endif %}">
+                <span class="d-flex align-items-center gap-2">
+                  <input class="form-check-input" type="radio" name="slot_id" value="{{ slot.id }}"
+                         {% if not opt.allowed %}disabled{% elif loop.first %}checked{% endif %} required>
+                  <span>
+                    <span class="fw-bold d-block">{{ slot.name }} · {{ slot.slot_date.strftime('%d %b') }}</span>
+                    <span class="small text-muted">{{ slot.start_time }}–{{ slot.end_time }}
+                      {% if is_priority and opt.allowed %}<span class="badge badge-teacher-priority ms-1">PRIORITY SEAT</span>{% endif %}
+                    </span>
+                  </span>
+                </span>
+                <span class="small">
+                  {% if opt.allowed %}
+                    <span class="badge {% if opt.remaining <= 5 %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ opt.remaining_for_me }} seats left</span>
+                  {% elif opt.reason == 'teacher_reserve' %}
+                    <span class="badge bg-info text-dark">Held for teachers until {{ slot.start_time }}</span>
+                  {% else %}
+                    <span class="badge bg-danger">Full</span>
+                  {% endif %}
+                </span>
+              </label>
+              {% endfor %}
+            </div>
+            <div class="form-text small">Pickup time = slot start. Ready-time estimates appear on your order after confirmation.</div>
+            {% else %}
             <input type="datetime-local" name="pickup_time" class="form-control" value="{{ min_pickup }}" min="{{ min_pickup }}" max="{{ max_pickup }}" required>
-            <div class="form-text small">Select advance time to avoid dining hall rush.</div>
+            <div class="form-text small">No pickup slots are configured yet - choose any advance time (15 min to 6 h). Ask the canteen team to publish slots.</div>
+            {% endif %}
           </div>
 
           <!-- Payment Simulation Method -->

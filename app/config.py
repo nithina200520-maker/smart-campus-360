@@ -78,6 +78,23 @@ class Config:
     # Number of ranked suggestions stored per new report
     LF_MATCH_LIMIT = int(os.getenv("LF_MATCH_LIMIT", 10))
 
+    # --- Phase 6: Smart Canteen Booking (teacher-first allocation) ---
+    # Master switch for teacher-first slot reservation. When False every order
+    # competes for slot capacity on a first-come basis (queue sorting still
+    # favours verified teachers at the kitchen counter).
+    CANTEEN_TEACHER_PRIORITY_ENABLED = os.getenv("CANTEEN_TEACHER_PRIORITY_ENABLED", "True").lower() in ("true", "1", "t")
+    # Fraction of each slot's capacity reserved for verified teachers until the
+    # slot opens (reservations are released at slot start so student orders
+    # are never indefinitely delayed).
+    CANTEEN_TEACHER_RESERVE_RATIO = float(os.getenv("CANTEEN_TEACHER_RESERVE_RATIO", 0.25))
+    # Auto-confirm orders when allocation succeeds (False keeps them 'pending'
+    # for manual canteen admin confirmation).
+    CANTEEN_AUTO_CONFIRM = os.getenv("CANTEEN_AUTO_CONFIRM", "True").lower() in ("true", "1", "t")
+    # Minimum lead time (minutes) before a slot start a student/teacher may book it
+    CANTEEN_MIN_LEAD_MINS = int(os.getenv("CANTEEN_MIN_LEAD_MINS", 15))
+    # Average kitchen minutes added per order queued ahead in the same slot
+    CANTEEN_PREP_MIN_PER_ORDER = int(os.getenv("CANTEEN_PREP_MIN_PER_ORDER", 4))
+
 class DevelopmentConfig(Config):
     DEBUG = True
     ALLOW_QUICK_SWITCH = os.getenv("ENABLE_QUICK_SWITCH", "True").lower() in ("true", "1", "t")

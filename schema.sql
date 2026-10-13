@@ -203,6 +203,20 @@ CREATE TABLE IF NOT EXISTS canteen_items (
     INDEX idx_item_available (is_available)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS canteen_pickup_slots (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    slot_date DATE NOT NULL,
+    start_time VARCHAR(5) NOT NULL COMMENT 'HH:MM',
+    end_time VARCHAR(5) NOT NULL COMMENT 'HH:MM',
+    order_capacity INT NOT NULL DEFAULT 50,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_sample_data BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_slot_date (slot_date),
+    INDEX idx_slot_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS canteen_orders (
     id INT AUTO_INCREMENT PRIMARY KEY,
     order_code VARCHAR(50) NOT NULL UNIQUE COMMENT 'Human-readable order tracking ID e.g. ORD-20261012-001',
@@ -211,7 +225,11 @@ CREATE TABLE IF NOT EXISTS canteen_orders (
     is_priority BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'TRUE for Teachers: guarantees teacher-first queue priority',
     total_amount DECIMAL(8, 2) NOT NULL DEFAULT 0.00,
     pickup_time DATETIME NOT NULL COMMENT 'Scheduled advance pickup timestamp',
-    order_status ENUM('placed', 'preparing', 'ready', 'collected', 'cancelled', 'refunded') NOT NULL DEFAULT 'placed',
+    slot_id INT NULL COMMENT 'Phase 6: configured pickup slot',
+    pickup_token VARCHAR(64) NULL UNIQUE COMMENT 'Phase 6: opaque QR pickup secret (no PII in QR)',
+    estimated_ready_at DATETIME NULL COMMENT 'Phase 6: realistic ready-time estimate',
+    confirmed_at DATETIME NULL COMMENT 'Phase 6: allocation confirmation timestamp',
+    order_status VARCHAR(24) NOT NULL DEFAULT 'placed' COMMENT 'placed (legacy), pending, confirmed, preparing, ready, collected, cancelled, refund_requested, refund_processing, refunded',
     payment_status ENUM('pending', 'paid', 'refunded') NOT NULL DEFAULT 'paid',
     payment_method ENUM('upi_simulation', 'cash_at_counter', 'card') NOT NULL DEFAULT 'upi_simulation',
     qr_code_path VARCHAR(255) NULL COMMENT 'Path to generated QR code verification image',
@@ -220,9 +238,11 @@ CREATE TABLE IF NOT EXISTS canteen_orders (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (slot_id) REFERENCES canteen_pickup_slots(id) ON DELETE SET NULL,
     INDEX idx_order_status (order_status),
     INDEX idx_order_priority (is_priority),
-    INDEX idx_order_user (user_id)
+    INDEX idx_order_user (user_id),
+    INDEX idx_order_slot (slot_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS canteen_order_items (
