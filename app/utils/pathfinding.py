@@ -10,7 +10,7 @@ def build_graph() -> Tuple[Dict[int, NavigationNode], Dict[int, List[Tuple[int, 
         nodes_dict: Map of node_id -> NavigationNode object
         adjacency: Map of node_id -> list of (neighbor_node_id, distance_meters, direction_hint)
     """
-    nodes = NavigationNode.query.all()
+    nodes = NavigationNode.query.filter_by(is_published=True).all()
     edges = NavigationEdge.query.all()
 
     nodes_dict = {n.id: n for n in nodes}

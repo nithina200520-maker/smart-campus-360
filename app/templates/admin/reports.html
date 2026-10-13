@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Campus Reports &amp; Analytics{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-4">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <div>
+      <span class="badge bg-primary px-3 py-1 rounded-pill mb-1">
+        <i class="fa-solid fa-chart-line me-1"></i> Main Admin &bull; Phase 8 Reports
+      </span>
+      <h2 class="fw-bold text-dark mb-0">Institutional Statistics &amp; Analytics</h2>
+      <p class="text-muted small mb-0">Every figure below is computed live from the Smart Campus 360 database &mdash; no hardcoded or demo numbers.</p>
+    </div>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-outline-secondary rounded-pill mt-2"><i class="fa-solid fa-arrow-left me-1"></i> Master Dashboard</a>
+  </div>
+
+  <!-- KPI row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-lg-3"><div class="card campus-card border-0 shadow-sm p-3"><div class="small text-muted fw-bold text-uppercase">Registered Users</div><div class="fs-3 fw-bold text-primary">{{ kpi.users_total }}</div><div class="small text-muted">{{ kpi.users_active }} active accounts</div></div></div>
+    <div class="col-6 col-md-4 col-lg-3"><div class="card campus-card border-0 shadow-sm p-3"><div class="small text-muted fw-bold text-uppercase">Faculty</div><div class="fs-3 fw-bold text-purple">{{ kpi.teachers_verified }} verified</div><div class="small text-muted">{{ kpi.teachers_pending }} pending review</div></div></div>
+    <div class="col-6 col-md-4 col-lg-3"><div class="card campus-card border-0 shadow-sm p-3"><div class="small text-muted fw-bold text-uppercase">Campus Map</div><div class="fs-3 fw-bold text-info">{{ kpi.nodes_published }} published</div><div class="small text-muted">{{ kpi.edges_total }} paths &middot; {{ kpi.photos_total }} photos &middot; {{ kpi.nodes_unpublished }} unpublished</div></div></div>
+    <div class="col-6 col-md-4 col-lg-3"><div class="card campus-card border-0 shadow-sm p-3"><div class="small text-muted fw-bold text-uppercase">Lost &amp; Found</div><div class="fs-3 fw-bold text-success">{{ kpi.lf_total }} reports</div><div class="small text-muted">{{ kpi.lf_open }} open &middot; {{ kpi.lf_returned }} returned</div></div></div>
+    <div class="col-6 col-md-4 col-lg-3"><div class="card campus-card border-0 shadow-sm p-3"><div class="small text-muted fw-bold text-uppercase">Canteen Orders</div><div class="fs-3 fw-bold text-danger">{{ kpi.orders_total }}</div><div class="small text-muted">{{ kpi.orders_priority }} teacher-priority</div></div></div>
+    <div class="col-6 col-md-4 col-lg-3"><div class="card campus-card border-0 shadow-sm p-3"><div class="small text-muted fw-bold text-uppercase">Net Booked Value</div><div class="fs-3 fw-bold text-dark">&#8377;{{ "%.2f"|format(kpi.revenue_net) }}</div><div class="small text-muted">after refunds &middot; sandbox/test mode (no real money)</div></div></div>
+    <div class="col-6 col-md-4 col-lg-3"><div class="card campus-card border-0 shadow-sm p-3"><div class="small text-muted fw-bold text-uppercase">Refunds Completed</div><div class="fs-3 fw-bold text-warning">{{ kpi.refunds_succeeded }}</div><div class="small text-muted">gateway-confirmed</div></div></div>
+    <div class="col-6 col-md-4 col-lg-3"><div class="card campus-card border-0 shadow-sm p-3"><div class="small text-muted fw-bold text-uppercase">Data Sources</div><div class="fs-3 fw-bold text-secondary">100% DB</div><div class="small text-muted">live queries, zero placeholders</div></div></div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-8">
+      <div class="card campus-card border-0 shadow-sm p-3 h-100">
+        <h6 class="fw-bold mb-3"><i class="fa-solid fa-chart-area text-primary me-2"></i>Orders &amp; Booked Value &mdash; Last 14 Days</h6>
+        <canvas id="trendChart" height="110"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card campus-card border-0 shadow-sm p-3 h-100">
+        <h6 class="fw-bold mb-3"><i class="fa-solid fa-circle-half-stroke text-success me-2"></i>Order Lifecycle</h6>
+        <canvas id="orderStatusChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-4">
+      <div class="card campus-card border-0 shadow-sm p-3 h-100">
+        <h6 class="fw-bold mb-3"><i class="fa-solid fa-users text-primary me-2"></i>Users by Role</h6>
+        <canvas id="roleChart" height="220"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card campus-card border-0 shadow-sm p-3 h-100">
+        <h6 class="fw-bold mb-3"><i class="fa-solid fa-credit-card text-dark me-2"></i>Payment Records by Status</h6>
+        <canvas id="paymentChart" height="220"></canvas>
+        <p class="small text-muted mt-2 mb-0">Sandbox/test-mode ledger &mdash; no real funds.</p>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card campus-card border-0 shadow-sm p-3 h-100">
+        <h6 class="fw-bold mb-3"><i class="fa-solid fa-magnifying-glass-location text-success me-2"></i>Lost &amp; Found Reports</h6>
+        <canvas id="lfChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 pb-4">
+    <div class="col-lg-6">
+      <div class="card campus-card border-0 shadow-sm p-3 h-100">
+        <h6 class="fw-bold mb-3"><i class="fa-solid fa-trophy text-warning me-2"></i>Top Canteen Items by Quantity Sold</h6>
+        {% if charts.topItems.labels %}
+        <canvas id="topItemsChart" height="180"></canvas>
+        {% else %}
+        <p class="text-muted fst-italic small mb-0">No sales recorded yet &mdash; this chart fills in as real orders complete.</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card campus-card border-0 shadow-sm p-3 h-100">
+        <h6 class="fw-bold mb-3"><i class="fa-solid fa-table text-secondary me-2"></i>Module Summary (live counts)</h6>
+        <table class="table table-sm align-middle small mb-0">
+          <tbody>
+            <tr><td>Navigation points published / total</td><td class="fw-bold text-end">{{ kpi.nodes_published }} / {{ kpi.nodes_published + kpi.nodes_unpublished }}</td></tr>
+            <tr><td>Walkable route connections</td><td class="fw-bold text-end">{{ kpi.edges_total }}</td></tr>
+            <tr><td>Campus photographs on file</td><td class="fw-bold text-end">{{ kpi.photos_total }}</td></tr>
+            <tr><td>Lost &amp; Found reports (open / returned)</td><td class="fw-bold text-end">{{ kpi.lf_open }} / {{ kpi.lf_returned }}</td></tr>
+            <tr><td>Canteen orders (priority share)</td><td class="fw-bold text-end">{{ kpi.orders_total }} ({{ kpi.orders_priority }} teacher-first)</td></tr>
+            <tr><td>Verified faculty with priority queue</td><td class="fw-bold text-end">{{ kpi.teachers_verified }}</td></tr>
+            <tr><td>Refunds completed through gateway</td><td class="fw-bold text-end">{{ kpi.refunds_succeeded }}</td></tr>
+            <tr><td>Net booked value after refunds</td><td class="fw-bold text-end">&#8377;{{ "%.2f"|format(kpi.revenue_net) }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+  // All series are serialized from live database queries in the reports route.
+  const CHARTS = {{ charts | tojson }};
+  const grid = { color: 'rgba(0,0,0,0.05)' };
+
+  const trend = document.getElementById('trendChart');
+  new Chart(trend, {
+    type: 'line',
+    data: {
+      labels: CHARTS.timeSeries.labels,
+      datasets: [
+        { label: 'Orders', data: CHARTS.timeSeries.orders, borderColor: '#0d6efd',
+          backgroundColor: 'rgba(13,110,253,0.10)', fill: true, tension: 0.3, yAxisID: 'y' },
+        { label: 'Booked Value (₹, sandbox)', data: CHARTS.timeSeries.revenue, borderColor: '#198754',
+          backgroundColor: 'rgba(25,135,84,0.08)', fill: false, tension: 0.3, yAxisID: 'y1' }
+      ]
+    },
+    options: { responsive: true, interaction: { mode: 'index', intersect: false },
+      scales: { y: { beginAtZero: true, grid, title: { display: true, text: 'Orders' } },
+                y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '₹' } } } }
+  });
+
+  function pie(id, obj, colors) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const entries = Object.entries(obj || {});
+    new Chart(el, {
+      type: entries.length > 5 ? 'bar' : 'doughnut',
+      data: { labels: entries.map(e => e[0].replace(/_/g, ' ')),
+              datasets: [{ data: entries.map(e => e[1]),
+                           backgroundColor: colors || ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#20c997','#6c757d','#fd7e14'] }] },
+      options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+  }
+  pie('orderStatusChart', CHARTS.orderStatus);
+  pie('roleChart', CHARTS.userRoles);
+  pie('paymentChart', CHARTS.paymentStatus);
+  pie('lfChart', CHARTS.lfTypes, ['#dc3545', '#198754']);
+
+  if (CHARTS.topItems.labels.length) {
+    new Chart(document.getElementById('topItemsChart'), {
+      type: 'bar',
+      data: { labels: CHARTS.topItems.labels,
+              datasets: [{ label: 'Quantity sold', data: CHARTS.topItems.quantities, backgroundColor: '#ffc107' }] },
+      options: { indexAxis: 'y', responsive: true, scales: { x: { beginAtZero: true, ticks: { precision: 0 }, grid } } }
+    });
+  }
+</script>
+{% endblock %}

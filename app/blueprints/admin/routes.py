@@ -1,11 +1,16 @@
 import csv
 import io
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
+from sqlalchemy import text as sql_text
 from werkzeug.utils import secure_filename
 from flask import render_template, request, redirect, url_for, flash, current_app, Response
 from app.blueprints.admin import admin_bp
-from app.models import User, NavigationNode, NavigationEdge, CampusFloorPlan, LostFoundItem, LostFoundClaim, LostFoundMatch, Notification, CanteenItem, CanteenOrder, AuditLog
+from app.models import (
+    User, NavigationNode, NavigationEdge, CampusFloorPlan, LostFoundItem, LostFoundClaim,
+    LostFoundMatch, Notification, CanteenCategory, CanteenItem, CanteenOrder, CanteenOrderItem,
+    Payment, Refund, AuditLog,
+)
 from app.database import db
 from app.utils.auth_helpers import role_required, get_current_user
 
@@ -50,6 +55,17 @@ def dashboard():
     total_orders = CanteenOrder.query.count()
     total_revenue = db.session.query(db.func.sum(CanteenOrder.total_amount)).filter_by(payment_status='paid').scalar() or 0.0
 
+    # PHASE 8: unified cross-module indicators (all computed live from the DB)
+    published_nodes = NavigationNode.query.filter_by(is_published=True).count()
+    suggested_matches = LostFoundMatch.query.filter_by(status='suggested').count()
+    pending_claims = LostFoundClaim.query.filter_by(status='pending').count()
+    refunds_open = Refund.query.filter(Refund.status.in_(('requested', 'processing', 'failed'))).count()
+    payments_captured = float(db.session.query(db.func.sum(Payment.amount)).filter(
+        Payment.status.in_(('succeeded', 'partially_refunded'))).scalar() or 0.0)
+    low_stock_items = CanteenItem.query.filter(
+        CanteenItem.is_available.is_(True), CanteenItem.stock_quantity <= 5).count()
+    priority_orders = CanteenOrder.query.filter_by(is_priority=True).count()
+
     recent_audits = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(10).all()
     recent_users = User.query.order_by(User.created_at.desc()).limit(6).all()
     pending_teachers = User.query.filter_by(role='teacher', is_verified=False).limit(5).all()
@@ -62,7 +78,15 @@ def dashboard():
         "total_lf_items": total_lf_items,
         "open_lf_items": open_lf_items,
         "total_orders": total_orders,
-        "total_revenue": float(total_revenue)
+        "total_revenue": float(total_revenue),
+        # Phase 8 central control additions
+        "published_nodes": published_nodes,
+        "suggested_matches": suggested_matches,
+        "pending_claims": pending_claims,
+        "refunds_open": refunds_open,
+        "payments_captured": payments_captured,
+        "low_stock_items": low_stock_items,
+        "priority_orders": priority_orders,
     }
 
     return render_template(
@@ -307,6 +331,8 @@ def manage_navigation():
     edges = NavigationEdge.query.order_by(NavigationEdge.id.asc()).all()
     floor_plans = CampusFloorPlan.query.order_by(CampusFloorPlan.building.asc()).all()
     buildings = sorted(list(set(n.building for n in nodes)))
+    floors = sorted(list(set(n.floor for n in nodes)))
+    photos_count = sum(1 for n in nodes if n.photo_url)
 
     return render_template(
         'admin/manage_navigation.html',
@@ -314,7 +340,9 @@ def manage_navigation():
         nodes=nodes,
         edges=edges,
         floor_plans=floor_plans,
-        buildings=buildings
+        buildings=buildings,
+        floors=floors,
+        photos_count=photos_count
     )
 
 @admin_bp.route('/navigation/node/create', methods=['POST'])
@@ -372,6 +400,55 @@ def delete_nav_node(node_id):
                  details=f"Deleted navigation node {code}: '{name}'.", ip_address=request.remote_addr)
     flash(f"Navigation point '{name}' deleted along with its connections.", "success")
     return redirect(url_for('admin.manage_navigation'))
+
+@admin_bp.route('/navigation/node/<int:node_id>/update', methods=['POST'])
+@role_required('main_admin')
+def update_nav_node(node_id):
+    """PHASE 8: update room information, photograph and map position of a published point."""
+    user = get_current_user()
+    node = NavigationNode.query.get_or_404(node_id)
+
+    for field, cleaner in (('name', str.strip), ('building', str.strip), ('floor', str.strip),
+                           ('category', str.strip), ('description', str.strip)):
+        value = request.form.get(field)
+        if value is not None and (field in ('name', 'building') or value.strip()):
+            setattr(node, field, cleaner(value))
+
+    if request.form.get('x_coord') is not None:
+        node.x_coord = int(request.form.get('x_coord') or 0)
+    if request.form.get('y_coord') is not None:
+        node.y_coord = int(request.form.get('y_coord') or 0)
+    node.is_panoramic = bool(request.form.get('is_panoramic'))
+    node.is_accessible = bool(request.form.get('is_accessible'))
+
+    photo_file = request.files.get('photo')
+    if photo_file and photo_file.filename:
+        saved = _save_navigation_photo(photo_file)
+        if saved:
+            node.photo_url = saved
+
+    db.session.commit()
+    AuditLog.log(action='NAV_NODE_UPDATED', module='NAVIGATION', user_id=user.id,
+                 details=f"Updated room/location info for node {node.node_code}: '{node.name}'.",
+                 ip_address=request.remote_addr)
+    flash(f"Location '{node.name}' updated.", "success")
+    return redirect(url_for('admin.manage_navigation'))
+
+@admin_bp.route('/navigation/node/<int:node_id>/toggle-publish', methods=['POST'])
+@role_required('main_admin')
+def toggle_nav_node_publish(node_id):
+    """PHASE 8: publish / unpublish a campus location. Unpublished points vanish from
+    the public map, node APIs and route finding until Main Admin publishes them."""
+    user = get_current_user()
+    node = NavigationNode.query.get_or_404(node_id)
+    node.is_published = not node.is_published
+    db.session.commit()
+    state = 'PUBLISHED' if node.is_published else 'UNPUBLISHED'
+    AuditLog.log(action='NAV_NODE_PUBLICATION_CHANGED', module='NAVIGATION', user_id=user.id,
+                 details=f"{state} location {node.node_code}: '{node.name}'.",
+                 ip_address=request.remote_addr)
+    flash(f"Location '{node.name}' is now {'live on the campus map' if node.is_published else 'withdrawn from the public map'}.", "success")
+    return redirect(request.referrer or url_for('admin.manage_navigation'))
 
 @admin_bp.route('/navigation/edge/create', methods=['POST'])
 @role_required('main_admin')
@@ -868,3 +945,165 @@ def ai_match_lab():
                         _os.unlink(tmp_path)
 
     return render_template('admin/ai_lab.html', **context)
+
+# ---------------------------------------------------------------------------
+# PHASE 8: CENTRAL MAIN ADMIN DASHBOARD - CANTEEN CONSOLE + REPORTS
+# ---------------------------------------------------------------------------
+
+@admin_bp.route('/canteen')
+@role_required('main_admin')
+def manage_canteen():
+    """Main Admin canteen control center: accounts, menu & stock, orders with
+    teacher-priority visibility, gateway payment records, refund requests and complaints."""
+    user = get_current_user()
+    tab = request.args.get('tab', 'orders')
+
+    # --- Teacher and student orders (with priority + payment state) ---
+    order_query = CanteenOrder.query.order_by(CanteenOrder.created_at.desc())
+    status_f = request.args.get('status')
+    role_f = request.args.get('role')
+    if status_f:
+        order_query = order_query.filter_by(order_status=status_f)
+    if role_f:
+        order_query = order_query.filter_by(user_role_at_order=role_f)
+    orders = order_query.limit(100).all()
+
+    # --- Food items & stock (grouped by category) ---
+    categories = CanteenCategory.query.order_by(CanteenCategory.display_order.asc()).all()
+    items = CanteenItem.query.order_by(CanteenItem.name.asc()).all()
+    low_stock = [i for i in items if i.is_available and int(i.stock_quantity) <= 5]
+
+    # --- Payment records (Phase 7 gateway ledger) ---
+    payments = Payment.query.order_by(Payment.created_at.desc()).limit(100).all()
+
+    # --- Refund requests + complaint trail (all statuses, newest first) ---
+    refunds = Refund.query.order_by(Refund.created_at.desc()).limit(60).all()
+
+    # --- Canteen Admin accounts ---
+    canteen_admins = User.query.filter_by(role='canteen_admin').order_by(User.created_at.desc()).all()
+
+    stats = {
+        'orders_total': CanteenOrder.query.count(),
+        'orders_active': CanteenOrder.query.filter(
+            CanteenOrder.order_status.in_(('pending', 'placed', 'confirmed', 'preparing', 'ready'))).count(),
+        'priority_orders': CanteenOrder.query.filter_by(is_priority=True).count(),
+        'items_total': len(items),
+        'low_stock': len(low_stock),
+        'captured_total': float(db.session.query(db.func.sum(Payment.amount)).filter(
+            Payment.status.in_(('succeeded', 'partially_refunded'))).scalar() or 0.0),
+        'refunded_total': float(db.session.query(db.func.sum(Payment.refunded_amount)).scalar() or 0.0),
+        'refunds_open': Refund.query.filter(Refund.status.in_(('requested', 'processing', 'failed'))).count(),
+        'mismatch_payments': Payment.query.filter_by(confirm_mismatch=True).count(),
+    }
+
+    return render_template('admin/manage_canteen.html', user=user, tab=tab, orders=orders,
+                           categories=categories, items=items, low_stock=low_stock,
+                           payments=payments, refunds=refunds, canteen_admins=canteen_admins,
+                           stats=stats, current_status=status_f, current_role=role_f)
+
+@admin_bp.route('/canteen/item/<int:item_id>/update', methods=['POST'])
+@role_required('main_admin')
+def admin_update_canteen_item(item_id):
+    """Main Admin direct control of menu pricing, stock and availability."""
+    admin = get_current_user()
+    item = CanteenItem.query.get_or_404(item_id)
+
+    old = (float(item.price), int(item.stock_quantity), bool(item.is_available))
+    price = request.form.get('price', type=float)
+    stock = request.form.get('stock_quantity', type=int)
+    if price is not None and price >= 0:
+        item.price = price
+    if stock is not None and stock >= 0:
+        item.stock_quantity = stock
+    item.is_available = bool(request.form.get('is_available'))
+
+    db.session.commit()
+    AuditLog.log(action='CANTEEN_ITEM_UPDATED_BY_MAIN_ADMIN', module='CANTEEN', user_id=admin.id,
+                 details=f"Item '{item.name}': price/stock/availability {old} -> "
+                         f"({float(item.price)}, {int(item.stock_quantity)}, {item.is_available}).",
+                 ip_address=request.remote_addr)
+    flash(f"Menu item '{item.name}' updated.", "success")
+    return redirect(request.referrer or url_for('admin.manage_canteen', tab='items'))
+
+@admin_bp.route('/reports')
+@role_required('main_admin')
+def reports():
+    """PHASE 8 statistics & charts computed live from the database - nothing hardcoded."""
+    user = get_current_user()
+    F = db.func
+
+    def count(q):
+        return q.count()
+
+    # ---- Headline KPIs (real rows only) ----
+    kpi = {
+        'users_total': count(User.query),
+        'users_active': User.query.filter_by(is_active=True).count(),
+        'teachers_verified': User.query.filter_by(role='teacher', is_verified=True).count(),
+        'teachers_pending': User.query.filter_by(role='teacher', is_verified=False).count(),
+        'nodes_published': NavigationNode.query.filter_by(is_published=True).count(),
+        'nodes_unpublished': NavigationNode.query.filter_by(is_published=False).count(),
+        'edges_total': count(NavigationEdge.query),
+        'photos_total': NavigationNode.query.filter(
+            NavigationNode.photo_url.isnot(None), NavigationNode.photo_url != '').count(),
+        'lf_total': count(LostFoundItem.query),
+        'lf_open': LostFoundItem.query.filter_by(status='open').count(),
+        'lf_returned': LostFoundItem.query.filter_by(status='closed').count(),
+        'orders_total': count(CanteenOrder.query),
+        'orders_priority': CanteenOrder.query.filter_by(is_priority=True).count(),
+        'revenue_net': float(db.session.query(F.sum(CanteenOrder.total_amount)).filter(
+            CanteenOrder.payment_status.in_(('paid', 'partially_refunded'))).scalar() or 0.0)
+            - float(db.session.query(F.sum(Payment.refunded_amount)).scalar() or 0.0),
+        'refunds_succeeded': Refund.query.filter_by(status='succeeded').count(),
+    }
+
+    # ---- 14-day orders + revenue time series ----
+    since = datetime.utcnow().date() - timedelta(days=13)
+    day_keys = [(since + timedelta(days=i)) for i in range(14)]
+    orders_series = {d: 0 for d in day_keys}
+    revenue_series = {d: 0.0 for d in day_keys}
+    rows = db.session.query(
+        CanteenOrder.created_at, CanteenOrder.total_amount, CanteenOrder.payment_status).all()
+    for created, amount, pay_status in rows:
+        if created and created.date() in orders_series:
+            orders_series[created.date()] += 1
+            if pay_status in ('paid', 'partially_refunded'):
+                revenue_series[created.date()] += float(amount or 0)
+    time_series = {
+        'labels': [d.strftime('%d %b') for d in day_keys],
+        'orders': [orders_series[d] for d in day_keys],
+        'revenue': [round(revenue_series[d], 2) for d in day_keys],
+    }
+
+    # ---- categorical distributions (real group-bys) ----
+    order_status_counts = dict((s, CanteenOrder.query.filter_by(order_status=s).count())
+                               for s, _ in db.session.query(
+                                   CanteenOrder.order_status, F.count(CanteenOrder.id)
+                               ).group_by(CanteenOrder.order_status).all())
+    role_counts = dict((r, User.query.filter_by(role=r).count())
+                       for r, in db.session.query(User.role).distinct().all())
+    lf_type_counts = {
+        'lost': LostFoundItem.query.filter_by(report_type='lost').count(),
+        'found': LostFoundItem.query.filter_by(report_type='found').count(),
+    }
+    payment_status_counts = dict((st, Payment.query.filter_by(status=st).count())
+                                 for st, in db.session.query(Payment.status).distinct().all())
+
+    # ---- top 5 sold items by real line-item quantity ----
+    top_rows = db.session.query(
+        CanteenOrderItem.item_name, F.sum(CanteenOrderItem.quantity).label('qty')
+    ).join(CanteenOrder, CanteenOrder.id == CanteenOrderItem.order_id
+    ).group_by(CanteenOrderItem.item_name).order_by(sql_text('qty DESC')).limit(5).all()
+    top_items = {'labels': [r[0] for r in top_rows], 'quantities': [int(r[1] or 0) for r in top_rows]}
+
+    charts = {
+        'timeSeries': time_series,
+        'orderStatus': order_status_counts,
+        'userRoles': role_counts,
+        'lfTypes': lf_type_counts,
+        'paymentStatus': payment_status_counts,
+        'topItems': top_items,
+    }
+
+    return render_template('admin/reports.html', user=user, kpi=kpi, charts=charts)
+

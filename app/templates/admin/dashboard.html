@@ -9,12 +9,18 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <div>
       <span class="badge bg-danger text-uppercase px-3 py-1 rounded-pill mb-1">
-        <i class="fa-solid fa-shield-halved me-1"></i> Main Administration
+        <i class="fa-solid fa-shield-halved me-1"></i> Main Administration &bull; Phase 8 Central Control
       </span>
       <h2 class="fw-bold text-dark mb-0">System Control Center</h2>
       <p class="text-muted small mb-0">Unified management across Navigation, AI Lost & Found, and Smart Canteen</p>
     </div>
     <div class="d-flex flex-wrap gap-2 mt-2 mt-md-0">
+      <a href="{{ url_for('admin.manage_canteen') }}" class="btn btn-outline-danger rounded-pill">
+        <i class="fa-solid fa-kitchen-set me-1"></i> Canteen Control
+      </a>
+      <a href="{{ url_for('admin.reports') }}" class="btn btn-outline-info rounded-pill text-dark">
+        <i class="fa-solid fa-chart-column me-1"></i> Reports &amp; Charts
+      </a>
       <a href="{{ url_for('admin.create_canteen_admin') }}" class="btn btn-outline-success rounded-pill">
         <i class="fa-solid fa-user-plus me-1"></i> Create Canteen Admin
       </a>
@@ -108,6 +114,23 @@
     </div>
   </div>
 
+  <!-- PHASE 8: Cross-Module Control Strip (live DB values) -->
+  <div class="row g-2 mb-4">
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center h-100"><div class="small text-muted fw-bold text-uppercase">Captured (Sandbox)</div><div class="fs-5 fw-bold text-dark">₹{{ "%.2f"|format(stats.payments_captured) }}</div></div></div>
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center h-100"><div class="small text-muted fw-bold text-uppercase">Open Refunds</div><div class="fs-5 fw-bold {% if stats.refunds_open %}text-warning{% else %}text-secondary{% endif %}">{{ stats.refunds_open }}</div></div></div>
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center h-100"><div class="small text-muted fw-bold text-uppercase">Teacher-First</div><div class="fs-5 fw-bold text-purple">{{ stats.priority_orders }}</div></div></div>
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center h-100"><div class="small text-muted fw-bold text-uppercase">AI Matches Review</div><div class="fs-5 fw-bold {% if stats.suggested_matches %}text-info{% else %}text-secondary{% endif %}">{{ stats.suggested_matches }}</div></div></div>
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center h-100"><div class="small text-muted fw-bold text-uppercase">Pending Claims</div><div class="fs-5 fw-bold {% if stats.pending_claims %}text-warning{% else %}text-secondary{% endif %}">{{ stats.pending_claims }}</div></div></div>
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center h-100"><div class="small text-muted fw-bold text-uppercase">Map Published</div><div class="fs-5 fw-bold text-success">{{ stats.published_nodes }}<span class="fs-6 text-muted">/{{ stats.total_nodes }}</span></div></div></div>
+  </div>
+  {% if stats.low_stock_items > 0 %}
+  <div class="alert alert-warning py-2 small rounded-3 d-flex align-items-center gap-2">
+    <i class="fa-solid fa-boxes-packing"></i>
+    <strong>{{ stats.low_stock_items }} canteen item(s) at low stock (≤5).</strong>
+    <a href="{{ url_for('admin.manage_canteen', tab='items') }}" class="ms-auto fw-bold">Restock now <i class="fa-solid fa-arrow-right"></i></a>
+  </div>
+  {% endif %}
+
   <div class="row g-4 mb-4">
     <!-- Module Control Hub -->
     <div class="col-lg-8">
@@ -141,8 +164,9 @@
               <div class="p-3 border rounded-3 bg-light text-center">
                 <i class="fa-solid fa-kitchen-set fa-2x text-danger mb-2"></i>
                 <h6 class="fw-bold mb-1">Canteen Operations</h6>
-                <p class="small text-muted mb-2">Live queue, priority orders, menus</p>
-                <a href="{{ url_for('canteen_admin.dashboard') }}" class="btn btn-sm btn-danger rounded-pill w-100">Canteen Queue</a>
+                <p class="small text-muted mb-2">Live queue, priority orders, menus, payments</p>
+                <a href="{{ url_for('admin.manage_canteen') }}" class="btn btn-sm btn-danger rounded-pill w-100 mb-1"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Canteen Console</a>
+                <a href="{{ url_for('canteen_admin.dashboard') }}" class="btn btn-sm btn-outline-danger rounded-pill w-100">Live Pickup Queue</a>
               </div>
             </div>
           </div>

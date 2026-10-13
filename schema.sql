@@ -55,11 +55,13 @@ CREATE TABLE IF NOT EXISTS navigation_nodes (
     is_panoramic BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Marks 360-degree panoramic photograph (Phase 3)',
     is_accessible BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Wheelchair / Universal accessibility',
     is_sample_data BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Explicit marker for sample/unverified data',
+    is_published BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Phase 8: Main Admin location publication (hidden from public map when false)',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_node_building (building),
     INDEX idx_node_floor (floor),
-    INDEX idx_node_category (category)
+    INDEX idx_node_category (category),
+    INDEX idx_node_published (is_published)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS navigation_edges (

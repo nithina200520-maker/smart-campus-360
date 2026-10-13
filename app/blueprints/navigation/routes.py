@@ -8,7 +8,8 @@ from app.utils.pathfinding import find_route
 def index():
     """Module 1: Interactive Campus Navigator foundation."""
     user = get_current_user()
-    nodes = NavigationNode.query.order_by(NavigationNode.building.asc(), NavigationNode.name.asc()).all()
+    # Phase 8: only Main-Admin-published locations appear on the public map
+    nodes = NavigationNode.query.filter_by(is_published=True).order_by(NavigationNode.building.asc(), NavigationNode.name.asc()).all()
     categories = sorted(list(set(n.category for n in nodes)))
     buildings = sorted(list(set(n.building for n in nodes)))
     floor_plans = CampusFloorPlan.query.order_by(CampusFloorPlan.building.asc()).all()
@@ -25,7 +26,7 @@ def index():
 @navigation_bp.route('/api/nodes', methods=['GET'])
 def get_nodes_api():
     """API endpoint providing all navigation nodes for map canvas rendering."""
-    nodes = NavigationNode.query.all()
+    nodes = NavigationNode.query.filter_by(is_published=True).all()
     return jsonify({
         "success": True,
         "nodes": [n.to_dict() for n in nodes]
@@ -57,7 +58,7 @@ def calculate_route_api():
 @navigation_bp.route('/api/node/<int:node_id>', methods=['GET'])
 def get_node_detail_api(node_id):
     """Fetches single node details with street-view / point of interest photo."""
-    node = NavigationNode.query.get_or_404(node_id)
+    node = NavigationNode.query.filter_by(id=node_id, is_published=True).first_or_404()
     return jsonify({
         "success": True,
         "node": node.to_dict()
@@ -71,7 +72,7 @@ def get_node_connections_api(node_id):
     bidirectional/directed edges) with direction hints, distance and photograph
     references so the viewer can move photo-to-photo like Google Street View.
     """
-    node = NavigationNode.query.get_or_404(node_id)
+    node = NavigationNode.query.filter_by(id=node_id, is_published=True).first_or_404()
     edges = NavigationEdge.query.filter(
         ((NavigationEdge.source_node_id == node_id) & NavigationEdge.is_bidirectional) |
         ((NavigationEdge.target_node_id == node_id) & NavigationEdge.is_bidirectional) |
@@ -84,7 +85,8 @@ def get_node_connections_api(node_id):
         other_id = edge.target_node_id if edge.source_node_id == node_id else edge.source_node_id
         if other_id == node.id or other_id in seen:
             continue
-        other = NavigationNode.query.get(other_id)
+        # Phase 8: unpublished neighbours are not exposed on the public walker
+        other = NavigationNode.query.filter_by(id=other_id, is_published=True).first()
         if not other:
             continue
         seen.add(other.id)

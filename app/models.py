@@ -109,6 +109,9 @@ class NavigationNode(db.Model):
     is_panoramic = db.Column(db.Boolean, default=False, nullable=False)
     is_accessible = db.Column(db.Boolean, default=True, nullable=False)
     is_sample_data = db.Column(db.Boolean, default=True, nullable=False)
+    # Phase 8: Main Admin location publication - unpublished rooms/points are
+    # hidden from the public map, APIs and route finding until officially published.
+    is_published = db.Column(db.Boolean, default=True, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -130,7 +133,8 @@ class NavigationNode(db.Model):
             "photo_url": self.photo_url,
             "is_panoramic": self.is_panoramic,
             "is_accessible": self.is_accessible,
-            "is_sample_data": self.is_sample_data
+            "is_sample_data": self.is_sample_data,
+            "is_published": self.is_published
         }
 
     def __repr__(self):

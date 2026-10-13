@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}Canteen Control Center{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-4">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <div>
+      <span class="badge bg-danger px-3 py-1 rounded-pill mb-1">
+        <i class="fa-solid fa-shield-halved me-1"></i> Main Admin &bull; Phase 8 Canteen Control
+      </span>
+      <h2 class="fw-bold text-dark mb-0">Canteen Management Console</h2>
+      <p class="text-muted small mb-0">Canteen Admin accounts, food items &amp; stock, teacher/student orders, order priority, payment records, refund requests and complaints &mdash; all under Main Admin control.</p>
+    </div>
+    <div class="d-flex gap-2 mt-2 mt-md-0">
+      <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-outline-secondary rounded-pill"><i class="fa-solid fa-arrow-left me-1"></i> Dashboard</a>
+      <a href="{{ url_for('admin.reports') }}" class="btn btn-sm btn-outline-primary rounded-pill"><i class="fa-solid fa-chart-column me-1"></i> Reports</a>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} rounded-3 py-2 small">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <!-- Cross-module KPI strip -->
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center"><div class="small text-muted fw-bold text-uppercase">Orders</div><div class="fs-4 fw-bold text-primary">{{ stats.orders_total }}</div><div class="small text-muted">{{ stats.orders_active }} active</div></div></div>
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center"><div class="small text-muted fw-bold text-uppercase">Priority</div><div class="fs-4 fw-bold text-purple">{{ stats.priority_orders }}</div><div class="small text-muted">teacher-first</div></div></div>
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center"><div class="small text-muted fw-bold text-uppercase">Menu Items</div><div class="fs-4 fw-bold text-success">{{ stats.items_total }}</div><div class="small text-muted">{{ stats.low_stock }} low stock</div></div></div>
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center"><div class="small text-muted fw-bold text-uppercase">Captured</div><div class="fs-4 fw-bold text-dark">&#8377;{{ "%.2f"|format(stats.captured_total) }}</div><div class="small text-muted">sandbox/test mode</div></div></div>
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center"><div class="small text-muted fw-bold text-uppercase">Refunded</div><div class="fs-4 fw-bold text-warning">&#8377;{{ "%.2f"|format(stats.refunded_total) }}</div><div class="small text-muted">{{ stats.refunds_open }} open cases</div></div></div>
+    <div class="col-6 col-md-3 col-lg-2"><div class="card campus-card border-0 shadow-sm p-2 text-center"><div class="small text-muted fw-bold text-uppercase">Mismatches</div><div class="fs-4 fw-bold {% if stats.mismatch_payments %}text-danger{% else %}text-secondary{% endif %}">{{ stats.mismatch_payments }}</div><div class="small text-muted">paid, not confirmed</div></div></div>
+  </div>
+
+  <!-- Tabs -->
+  <ul class="nav nav-pills mb-3 flex-wrap gap-1">
+    {% for key, label, icon in [
+      ('orders', 'Teacher &amp; Student Orders', 'list-check'),
+      ('items', 'Food Items &amp; Stock', 'utensils'),
+      ('payments', 'Payment Records', 'credit-card'),
+      ('refunds', 'Refunds &amp; Complaints', 'hand-holding-dollar'),
+      ('accounts', 'Canteen Admin Accounts', 'user-shield')
+    ] %}
+    <li class="nav-item">
+      <a class="nav-link {% if tab == key %}active{% endif %} rounded-pill" href="{{ url_for('admin.manage_canteen', tab=key) }}">
+        <i class="fa-solid fa-{{ icon }} me-1"></i> {{ label|safe }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <!-- ================= ORDERS TAB ================= -->
+  {% if tab == 'orders' %}
+  <div class="card campus-card border-0 shadow-sm p-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+      <h6 class="fw-bold mb-0">All Canteen Orders ({{ orders|length }} shown)</h6>
+      <form class="d-flex gap-2" method="GET">
+        <input type="hidden" name="tab" value="orders">
+        <select name="role" class="form-select form-select-sm" style="max-width:140px">
+          <option value="">All roles</option>
+          {% for r in ['teacher','student','visitor','canteen_admin'] %}
+          <option value="{{ r }}" {% if current_role == r %}selected{% endif %}>{{ r|title }}</option>
+          {% endfor %}
+        </select>
+        <select name="status" class="form-select form-select-sm" style="max-width:170px">
+          <option value="">All statuses</option>
+          {% for s in ['pending','confirmed','preparing','ready','collected','cancelled','refund_requested','refund_processing','refunded'] %}
+          <option value="{{ s }}" {% if current_status == s %}selected{% endif %}>{{ s.replace('_',' ')|title }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-primary rounded-pill">Filter</button>
+      </form>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle small mb-0">
+        <thead class="table-light"><tr><th>Order</th><th>Customer</th><th>Role</th><th>Priority</th><th>Amount</th><th>Order Status</th><th>Payment</th><th>Placed</th><th>Manage</th></tr></thead>
+        <tbody>
+        {% for o in orders %}
+          <tr>
+            <td class="fw-bold">{{ o.order_code }}</td>
+            <td>{{ o.customer.full_name if o.customer else 'Unknown' }}</td>
+            <td><span class="badge bg-secondary">{{ o.user_role_at_order }}</span></td>
+            <td>{% if o.is_priority %}<span class="badge badge-teacher-priority"><i class="fa-solid fa-chalkboard-user me-1"></i>TEACHER-FIRST</span>{% else %}<span class="text-muted">Standard</span>{% endif %}</td>
+            <td class="fw-bold text-success">&#8377;{{ "%.2f"|format(o.total_amount) }}</td>
+            <td><span class="badge {% if o.order_status in ['collected'] %}bg-success{% elif o.order_status in ['cancelled','refunded'] %}bg-danger{% elif o.order_status in ['refund_requested','refund_processing'] %}bg-warning text-dark{% elif o.order_status in ['ready','preparing'] %}bg-info text-dark{% else %}bg-primary{% endif %}">{{ o.status_label }}</span></td>
+            <td><span class="badge {% if o.payment_status == 'paid' %}bg-success{% elif o.payment_status == 'refunded' %}bg-danger{% elif o.payment_status == 'partially_refunded' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ o.payment_status.replace('_',' ') }}</span></td>
+            <td class="text-muted">{{ o.created_at.strftime('%d %b %H:%M') if o.created_at else '-' }}</td>
+            <td class="text-end text-nowrap">
+              {% if o.payment and o.payment.confirm_mismatch %}
+              <form method="POST" action="{{ url_for('canteen_admin.resolve_payment_mismatch', order_id=o.id) }}" class="d-inline">
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Paid but not confirmed - re-confirm order & issue QR"><i class="fa-solid fa-rotate py-0"></i> Resolve</button>
+              </form>
+              {% endif %}
+              <a href="{{ url_for('canteen_admin.dashboard') }}" class="btn btn-sm btn-outline-primary py-0 px-1" title="Queue &amp; status controls live in the Canteen Operator Hub"><i class="fa-solid fa-kitchen-set"></i></a>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="9" class="text-center text-muted py-3">No orders match this filter.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="small text-muted mt-2 mb-0"><i class="fa-solid fa-circle-info me-1"></i>Order status transitions and QR pickup verification stay in the Canteen Operator Hub (Main Admin retains full clearance). Teacher priority is system-derived from verified faculty &mdash; never silently revoked when students are charged.</p>
+  </div>
+  {% endif %}
+
+  <!-- ================= ITEMS & STOCK TAB ================= -->
+  {% if tab == 'items' %}
+  <div class="card campus-card border-0 shadow-sm p-3">
+    <h6 class="fw-bold mb-1">Food Items, Pricing &amp; Live Stock</h6>
+    {% if low_stock %}
+    <div class="alert alert-warning py-2 small rounded-3 mt-2 mb-2">
+      <i class="fa-solid fa-triangle-exclamation me-1"></i><strong>Low stock (&le;5):</strong>
+      {% for i in low_stock %}{{ i.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+    <div class="table-responsive mt-2">
+      <table class="table table-sm align-middle small mb-0">
+        <thead class="table-light"><tr><th>Item</th><th>Category</th><th>Price (&#8377;)</th><th>Stock</th><th>Available</th><th></th></tr></thead>
+        <tbody>
+        {% for item in items %}
+          <tr>
+            <td class="fw-bold">{{ item.name }}<div class="text-muted small">{{ item.category_rel.name if item.category_rel else '-' }}</div></td>
+            <td><span class="badge bg-secondary">{{ item.category_rel.name if item.category_rel else 'Uncategorized' }}</span></td>
+            <td><input type="number" name="price" form="itemform-{{ item.id }}" step="0.5" min="0" value="{{ '%.2f'|format(item.price) }}" class="form-control form-control-sm" style="width:90px"></td>
+            <td><input type="number" name="stock_quantity" form="itemform-{{ item.id }}" min="0" value="{{ item.stock_quantity }}" class="form-control form-control-sm" style="width:80px"></td>
+            <td><input type="checkbox" name="is_available" form="itemform-{{ item.id }}" {% if item.is_available %}checked{% endif %} class="form-check-input"></td>
+            <td class="text-end">
+              <form id="itemform-{{ item.id }}" method="POST" action="{{ url_for('admin.admin_update_canteen_item', item_id=item.id) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-primary rounded-pill py-0">Save</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-3">Menu is empty. Canteen Admins can add items from the Operator Hub.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ================= PAYMENTS TAB ================= -->
+  {% if tab == 'payments' %}
+  <div class="card campus-card border-0 shadow-sm p-3">
+    <h6 class="fw-bold mb-2">Gateway Payment Records &mdash; {{ payments|length }} shown</h6>
+    <p class="small text-muted"><i class="fa-solid fa-flask me-1"></i>Sandbox / test-mode ledger: these are verification records for workflow testing, <strong>no real money was transferred</strong>.</p>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle small mb-0">
+        <thead class="table-light"><tr><th>Order</th><th>Provider</th><th>Intent ID</th><th>Transaction Ref</th><th>Amount</th><th>Refunded</th><th>Status</th><th>Flag</th><th>Date</th></tr></thead>
+        <tbody>
+        {% for p in payments %}
+          <tr>
+            <td class="fw-bold">{{ p.order.order_code if p.order else '-' }}</td>
+            <td><span class="badge bg-dark text-uppercase">{{ p.provider }}</span></td>
+            <td class="text-muted">{{ p.intent_id }}</td>
+            <td>{{ p.transaction_reference or '-' }}</td>
+            <td class="fw-bold">&#8377;{{ "%.2f"|format(p.amount) }}</td>
+            <td>{% if p.refunded_amount and p.refunded_amount > 0 %}<span class="text-danger">&#8377;{{ "%.2f"|format(p.refunded_amount) }}</span>{% else %}-{% endif %}</td>
+            <td><span class="badge {% if p.status == 'succeeded' %}bg-success{% elif p.status == 'failed' %}bg-danger{% elif p.status == 'processing' %}bg-info text-dark{% elif p.status in ('refunded','partially_refunded') %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ p.status.replace('_',' ') }}</span></td>
+            <td>{% if p.confirm_mismatch %}<span class="badge bg-danger"><i class="fa-solid fa-triangle-exclamation me-1"></i>MISMATCH</span>{% else %}-{% endif %}</td>
+            <td class="text-muted">{{ p.created_at.strftime('%d %b %H:%M') if p.created_at else '-' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="9" class="text-center text-muted py-3">No gateway payments recorded yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ================= REFUNDS & COMPLAINTS TAB ================= -->
+  {% if tab == 'refunds' %}
+  <div class="card campus-card border-0 shadow-sm p-3">
+    <h6 class="fw-bold mb-2">Refund Requests &amp; Complaint Register</h6>
+    <p class="small text-muted mb-3">8-step workflow: complaint &rarr; verify &rarr; determine amount &rarr; <strong>Main Admin authorisation</strong> &rarr; gateway initiation &rarr; reference tracked &rarr; status only on reliable confirmation &rarr; user notified.</p>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle small mb-0">
+        <thead class="table-light"><tr><th>Refund Ref</th><th>Order</th><th>Complaint</th><th>Amount</th><th>Type</th><th>Status</th><th>Gateway Ref</th><th>Authorized</th><th></th></tr></thead>
+        <tbody>
+        {% for r in refunds %}
+          <tr>
+            <td class="fw-bold">{{ r.refund_reference }}</td>
+            <td>{{ r.order.order_code if r.order else '-' }}</td>
+            <td class="text-muted" style="max-width:220px">{{ (r.complaint_note or '-')[:80] }}</td>
+            <td class="fw-bold">&#8377;{{ "%.2f"|format(r.amount) }}</td>
+            <td>{% if r.is_partial %}<span class="badge bg-warning text-dark">PARTIAL</span>{% else %}<span class="badge bg-primary">FULL</span>{% endif %}</td>
+            <td><span class="badge {% if r.status == 'succeeded' %}bg-success{% elif r.status == 'failed' %}bg-danger{% elif r.status == 'processing' %}bg-info text-dark{% else %}bg-warning text-dark{% endif %}">{{ r.status_label }}</span></td>
+            <td>{{ r.provider_refund_id or '-' }}</td>
+            <td>{% if r.authorized_by %}<i class="fa-solid fa-user-check text-success me-1"></i>#{{ r.authorized_by }}{% else %}<span class="text-muted">Pending</span>{% endif %}</td>
+            <td class="text-end text-nowrap">
+              {% if r.status == 'requested' and r.order %}
+              <form method="POST" action="{{ url_for('canteen_admin.process_refund', order_id=r.order_id) }}" class="d-inline">
+                <input type="hidden" name="amount" value="{{ '%.2f'|format(r.amount) }}">
+                <input type="hidden" name="refund_reason" value="{{ r.complaint_note or 'Authorized refund' }}">
+                <button class="btn btn-sm btn-success rounded-pill py-0" title="Authorise and initiate this refund through the gateway"><i class="fa-solid fa-money-bill-transfer me-1"></i>Authorise &amp; Refund</button>
+              </form>
+              {% elif r.status in ('failed','processing') %}
+              <form method="POST" action="{{ url_for('canteen_admin.retry_refund', refund_id=r.id) }}" class="d-inline">
+                <button class="btn btn-sm btn-outline-danger rounded-pill py-0" title="Re-sync with gateway or retry the failed refund"><i class="fa-solid fa-rotate-right me-1"></i>{{ 'Re-sync' if r.status == 'processing' else 'Retry' }}</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="9" class="text-center text-muted py-3">No refund complaints on record.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ================= CANTEEN ADMIN ACCOUNTS TAB ================= -->
+  {% if tab == 'accounts' %}
+  <div class="card campus-card border-0 shadow-sm p-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="fw-bold mb-0">Canteen Admin Accounts ({{ canteen_admins|length }})</h6>
+      <a href="{{ url_for('admin.create_canteen_admin') }}" class="btn btn-sm btn-success rounded-pill"><i class="fa-solid fa-user-plus me-1"></i>New Canteen Admin</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle small mb-0">
+        <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Department</th><th>Status</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+        {% for ca in canteen_admins %}
+          <tr>
+            <td class="fw-bold">{{ ca.full_name }}</td>
+            <td>{{ ca.email }}</td>
+            <td class="text-muted">{{ ca.department or '-' }}</td>
+            <td>{% if ca.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-danger">Suspended</span>{% endif %}</td>
+            <td class="text-muted">{{ ca.created_at.strftime('%d %b %Y') if ca.created_at else '-' }}</td>
+            <td class="text-end">
+              <form method="POST" action="{{ url_for('admin.toggle_user_status', user_id=ca.id) }}" class="d-inline">
+                <button class="btn btn-sm {% if ca.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %} rounded-pill py-0">{{ 'Suspend' if ca.is_active else 'Activate' }}</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-3">No Canteen Admin accounts provisioned yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="small text-muted mt-2 mb-0"><i class="fa-solid fa-lock me-1"></i>Canteen Admins operate only the Canteen Operator Hub &mdash; they have no access to campus map administration or unrestricted user management (enforced and audited).</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
