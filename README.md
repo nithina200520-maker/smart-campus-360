@@ -54,6 +54,14 @@ COLLEGE CAMPUS ANTIGRAVITY/
 ├── generate_placeholders.py           # PIL script generating sample photos
 ├── README.md                          # Documentation and setup instructions
 │
+├── docs/                              # Phase 11 college demonstration pack
+│   ├── PROJECT_REPORT.md              # Abstract → architecture → modules → DB → stack
+│   ├── INSTALLATION.md                # Setup, demo accounts, go-real data path
+│   ├── TESTING.md                     # 263-test inventory + AI evaluation
+│   ├── LIMITATIONS_AND_FUTURE.md      # Honest boundaries + roadmap
+│   ├── DEMO_SCRIPT.md                 # Step-by-step live demonstration
+│   └── manuals/                       # Student / Teacher / Main Admin / Canteen Admin
+│
 ├── instance/
 │   └── smart_campus_360.db            # Automatic SQLite failover database (zero-friction dev)
 │
@@ -90,8 +98,13 @@ COLLEGE CAMPUS ANTIGRAVITY/
 │   │   ├── __init__.py
 │   │   ├── auth_helpers.py            # @login_required, @role_required, session helpers
 │   │   ├── pathfinding.py             # A* & Dijkstra graph traversal algorithms
-│   │   ├── image_matcher.py           # OpenCV color-spatial embedding & cosine matcher
-│   │   └── qr_generator.py            # High-resolution QR code generator (PNG / Base64)
+│   │   ├── image_matcher.py           # MobileNetV2/HSV embeddings & cosine composite ranking
+│   │   ├── qr_generator.py            # High-resolution QR code generator (PNG / Base64)
+│   │   ├── canteen_booking.py         # Slot allocation & teacher-first reservation logic
+│   │   ├── payment_service.py         # Payment/refund lifecycle orchestration
+│   │   ├── payment_providers.py       # Sandbox gateway + Stripe test-mode adapter
+│   │   ├── matcher_eval.py            # AI evaluation harness (Precision@1, MRR)
+│   │   └── sample_navigation_data.py  # [SAMPLE]-labelled seed campus graph
 │   │
 │   ├── static/
 │   │   ├── css/
@@ -286,3 +299,66 @@ docker compose up -d --build web    # production image on http://127.0.0.1:8080
 1. Sign in as **student@gechassan.ac.in** (`Student@123`, see `init_db.py`) → **Lost & Found → Report** a lost calculator at *Central Library* - the AI engine finds the sample *Found Casio Calculator* and notifies both parties (check the navbar bell).
 2. Open the matched report → **Claim This Item** with a proof statement → sign in as **Main Admin** (`admin@gechassan.ac.in` / `Admin@123`) → **Manage Claims & Returns** → approve the claim, then **Record Return** to close it; watch the status timeline and notifications update.
 3. Open **/lost-found/my-reports** to see your reports and claims, and **/notifications/** for your full alert history and unread count.
+
+## 👁️ Completed Phase 5 Milestones - AI Matcher Quality & Controls
+
+1. **Duplicate-report detection** - a second report of the same item by the same user above the duplicate threshold is flagged and linked (`is_duplicate`, `duplicate_of_id`) instead of spamming matches.
+2. **Notification idempotency** - every logical event carries a unique `dedup_key`; the same match/claim alert can never fire twice.
+3. **Main Admin AI Lab** (`/admin/ai-lab`) - live tuning of match thresholds (surface 0.35 / medium 0.50 / strong 0.70 / duplicate 0.65 / suggestion limit 10) with test-pair evaluation showing the per-factor score breakdown.
+4. **Suggested-match admin decisions** - AI pairings now carry approve/reject verdicts with reasons (`decided_by_admin_id`, `rejected_reason`).
+5. **Measurable accuracy** - offline evaluation harness (`evaluate_matcher.py` + `evaluation/lost_found_dataset/`) reporting Precision@1, Hit@3/Hit@5 and MRR *for that dataset only* (no general accuracy claims). 32 new tests - **134 total**.
+
+## 🍽️ Completed Phase 6 Milestones - Smart Canteen Booking
+
+1. **Pickup slots** with per-slot order capacity, active toggles and a 15-minute minimum booking lead time.
+2. **Teacher-first allocation** - 25% of each slot's capacity is reserved for *verified* teachers until the slot starts, then released so students are never indefinitely blocked.
+3. **9-state order lifecycle** (pending → confirmed → preparing → ready → collected, plus cancellation/refund states) with customer notifications at every transition.
+4. **Tokenised QR pickup** - each order gets an opaque server-side `pickup_token`; the counter verifies it once, re-use is rejected.
+5. **Estimated ready times** from live queue depth, stock reserve/release on order/cancel, and Canteen Admin reports. Migration `migrate_phase6.py`, 34 tests - **168 total**.
+
+## 💳 Completed Phase 7 Milestones - Payment & Refund Processing
+
+1. **Provider abstraction**: deterministic built-in **sandbox** gateway (default) and official **Stripe SDK in TEST MODE only** - startup refuses any non-`sk_test_` key.
+2. **Backend-verified money state** - payment status changes only from provider confirm calls or **HMAC-signed webhooks** (5-minute tolerance) recorded once in `webhook_events` (replay/duplicate guard); browser claims are never trusted.
+3. **One payment per order** via unique intent ids - double capture is structurally impossible; `confirm_mismatch` surfaces captured-but-unconfirmable orders for refund instead of losing money.
+4. **Full & partial refund workflow**: complaint record → verification → **explicit admin authorization** → gateway initiation → reliable confirmation; failures stay visible with retry and attempt counts.
+5. Auto-refund on unfulfillable orders, payment ledger in the Canteen Admin console, 25 tests - **193 total**.
+
+## 🎛️ Completed Phase 8 Milestones - Central Main Admin Dashboard
+
+1. **Campus room management with publication control** - create/update rooms & navigation points; unpublished locations vanish from map, APIs and routing everywhere at once.
+2. **Unified canteen console** - accounts, items & stock, teacher/student order ledger, payment ledger, refund & complaint register.
+3. **Live-data reports** with Chart.js (`/admin/reports`) and cross-module control strip on the command dashboard.
+4. **RBAC isolation proofs** and 21 tests - **214 total**.
+
+## 🔗 Completed Phase 9 Milestones - Full Integration
+
+1. Unified auth, database, dashboards, roles and notifications across all three modules with a consistent responsive interface.
+2. Cross-module end-to-end tests (register → report → match → claim → return; browse → order → pay → ready → QR collect → refund) - 16 tests - **230 total**.
+
+## 🛡️ Completed Phase 10 Milestones - System Testing & Hardening
+
+1. **SQLite foreign-key enforcement** at the engine level; hardened navigation photo uploads; CSV import rows isolated via savepoints; upload rejections surfaced as flash messages.
+2. **Headless `create_admin.py`** for scripted provisioning; responsive reports tables.
+3. 33 system/audit tests - **263 total passing**.
+
+---
+
+## 🎓 Phase 11 - College Demonstration Pack
+
+Everything needed to demonstrate and submit the project lives in **[`docs/`](docs/)**:
+
+| Document | Contents |
+|---|---|
+| [docs/PROJECT_REPORT.md](docs/PROJECT_REPORT.md) | Abstract, problem statement, objectives, proposed system, architecture, module descriptions, database documentation, technology stack |
+| [docs/INSTALLATION.md](docs/INSTALLATION.md) | Full Windows/Docker setup, demo accounts, sample→real data migration path, troubleshooting |
+| [docs/manuals/STUDENT.md](docs/manuals/STUDENT.md) | Student (and visitor) user manual |
+| [docs/manuals/TEACHER.md](docs/manuals/TEACHER.md) | Teacher user manual (verification + priority booking) |
+| [docs/manuals/MAIN_ADMIN.md](docs/manuals/MAIN_ADMIN.md) | Main Admin manual (all consoles, AI Lab, payments oversight, go-live checklist) |
+| [docs/manuals/CANTEEN_ADMIN.md](docs/manuals/CANTEEN_ADMIN.md) | Canteen Admin manual (queue, menu, slots, refunds) |
+| [docs/TESTING.md](docs/TESTING.md) | 263-test inventory by area, strategy, measured AI evaluation, security checks |
+| [docs/LIMITATIONS_AND_FUTURE.md](docs/LIMITATIONS_AND_FUTURE.md) | Honest known limitations + phased future-enhancement roadmap |
+| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | Step-by-step 12-act live demonstration with narration, timings and fallbacks |
+
+**Honesty boundaries maintained throughout:** payments are sandbox-simulated (Stripe test-mode only if configured), notifications are in-app only, all campus content is labelled sample data, and no production deployment is claimed.
+
